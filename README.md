@@ -1,1 +1,1 @@
-"# Sosyal A§ Analiz Projesi" 
+"Sosyal Ag Analiz Projesi" 
