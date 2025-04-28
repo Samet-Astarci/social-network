@@ -44,14 +44,14 @@ class SocialGraph
             foreach (var friend in json["data"])
             {
                 int userId1 = (int)friend["id"];
-                int userId2 = GetUser IdFromFriend(friend);
+                int userId2 = GetUserIdFromFriend(friend);
                 edges.Add((userId1, userId2));
             }
         }
         return edges;
     }
 
-    private int GetUser IdFromFriend(JToken friend)
+    private int GetUserIdFromFriend(JToken friend)
     {
         return (int)friend["id"]; // Placeholder
     }
