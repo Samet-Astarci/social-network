@@ -2,15 +2,14 @@ const express = require("express");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const prisma = require("./prismaClient");
-const cors = require("cors");
+const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 3000; // Docker ile uyumlu hale getirmek için PORT'u çevresel değişkenden alıyoruz
+const PORT = 3000;
 
 app.use(express.json());
 app.use(cors());
 
-// Token doğrulama middleware
 const verifyToken = (req, res, next) => {
     const token = req.header("Authorization")?.split(" ")[1];
     if (!token) {
@@ -18,7 +17,7 @@ const verifyToken = (req, res, next) => {
     }
 
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || "secretkey"); // Secret key'i çevresel değişkenden alıyoruz
+        const decoded = jwt.verify(token, "secretkey");
         req.userId = decoded.userId;
         next();
     } catch (error) {
@@ -50,12 +49,7 @@ app.post("/register", async (req, res) => {
         },
     });
 
-    const token = jwt.sign(
-        { userId: newUser.id },
-        process.env.JWT_SECRET || "secretkey",
-        { expiresIn: "1h" }
-    );
-
+    const token = jwt.sign({ userId: newUser.id }, "secretkey", { expiresIn: "1h" });
     return res.status(201).json({
         message: "Kullanıcı başarıyla kaydedildi!",
         token: token,
@@ -82,12 +76,7 @@ app.post("/login", async (req, res) => {
         return res.status(400).json({ error: "Geçersiz şifre!" });
     }
 
-    const token = jwt.sign(
-        { userId: user.id },
-        process.env.JWT_SECRET || "secretkey",
-        { expiresIn: "1h" }
-    );
-
+    const token = jwt.sign({ userId: user.id }, "secretkey", { expiresIn: "1h" });
     return res.status(200).json({
         message: "Giriş başarılı!",
         token: token,
@@ -120,10 +109,12 @@ app.post("/connections", verifyToken, async (req, res) => {
     const { friendId } = req.body;
     const userId = req.userId;
 
+    // friendId var mı kontrol edelim
     if (!friendId) {
         return res.status(400).json({ error: "Arkadaş ID'si gereklidir!" });
     }
 
+    // Kullanıcıların varlığını kontrol edelim
     const user = await prisma.user.findUnique({ where: { id: userId } });
     const friend = await prisma.user.findUnique({ where: { id: friendId } });
 
@@ -131,6 +122,7 @@ app.post("/connections", verifyToken, async (req, res) => {
         return res.status(404).json({ error: "Kullanıcı veya arkadaş bulunamadı!" });
     }
 
+    // Zaten arkadaşlık var mı kontrol edelim
     const existingConnection = await prisma.connection.findFirst({
         where: {
             userId: userId,
@@ -142,6 +134,7 @@ app.post("/connections", verifyToken, async (req, res) => {
         return res.status(400).json({ error: "Bu kullanıcı zaten arkadaşınız!" });
     }
 
+    // Arkadaşlık ilişkisini ekleyelim
     const connection = await prisma.connection.create({
         data: {
             userId: userId,
@@ -149,10 +142,7 @@ app.post("/connections", verifyToken, async (req, res) => {
         },
     });
 
-    return res.status(201).json({
-        message: "Arkadaş başarıyla eklendi!",
-        connection,
-    });
+    return res.status(201).json({ message: "Arkadaş başarıyla eklendi!", connection });
 });
 
 // Arkadaş Listesi Endpoint’i
@@ -160,6 +150,7 @@ app.get("/connections/:userId", verifyToken, async (req, res) => {
     const { userId } = req.params;
     const requesterId = req.userId;
 
+    // Yetki kontrolü: Sadece kendi arkadaş listeni görebilirsin
     if (parseInt(userId) !== requesterId) {
         return res.status(403).json({ error: "Yetkisiz erişim!" });
     }
@@ -169,12 +160,12 @@ app.get("/connections/:userId", verifyToken, async (req, res) => {
             where: { userId: parseInt(userId) },
             include: {
                 friend: {
-                    select: { id: true, username: true, email: true },
-                },
-            },
+                    select: { id: true, username: true, email: true }
+                }
+            }
         });
 
-        const friends = connections.map((conn) => conn.friend);
+        const friends = connections.map(conn => conn.friend);
         return res.status(200).json({ friends });
     } catch (error) {
         return res.status(500).json({ error: "Arkadaş listesi alınamadı!" });
@@ -195,9 +186,7 @@ app.delete("/connections/:friendId", verifyToken, async (req, res) => {
         });
 
         if (!connection) {
-            return res.status(404).json({
-                error: "Arkadaşlık ilişkisi bulunamadı!",
-            });
+            return res.status(404).json({ error: "Arkadaşlık ilişkisi bulunamadı!" });
         }
 
         await prisma.connection.delete({
