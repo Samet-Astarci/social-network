@@ -1,204 +1,118 @@
-const express = require("express");
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
-const prisma = require("./prismaClient");
+const express = require('express');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const cors = require('cors');
+const { PrismaClient } = require('@prisma/client');
 
 const app = express();
-const PORT = 3000;
+const prisma = new PrismaClient();
 
+// CORS ve middleware ayarları
+app.use(cors({
+    origin: 'http://localhost:3000', // Frontend ile uyumlu CORS
+    methods: ['GET', 'POST'],
+    credentials: true
+}));
 app.use(express.json());
-app.use(cors());
+app.use(express.static('public')); // Statik dosyaları (örneğin, frontend1.html) servis et
 
-const verifyToken = (req, res, next) => {
-    const token = req.header("Authorization")?.split(" ")[1];
-    if (!token) {
-        return res.status(401).json({ error: "Token gerekli!" });
-    }
+const JWT_SECRET = process.env.JWT_SECRET || 'secretkey';
 
-    try {
-        const decoded = jwt.verify(token, "secretkey");
-        req.userId = decoded.userId;
-        next();
-    } catch (error) {
-        return res.status(401).json({ error: "Geçersiz token!" });
-    }
-};
-
-// Kullanıcı Kayıt Endpoint’i
+// Register endpoint
 app.post("/register", async (req, res) => {
-    const { username, email, password } = req.body;
-    if (!username || !email || !password) {
-        return res.status(400).json({ error: "Lütfen tüm alanları doldurun!" });
-    }
-
-    const userExists = await prisma.user.findUnique({
-        where: { email: email },
-    });
-
-    if (userExists) {
-        return res.status(400).json({ error: "Bu e-posta zaten kayıtlı!" });
-    }
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = await prisma.user.create({
-        data: {
-            username: username,
-            email: email,
-            password: hashedPassword,
-        },
-    });
-
-    const token = jwt.sign({ userId: newUser.id }, "secretkey", { expiresIn: "1h" });
-    return res.status(201).json({
-        message: "Kullanıcı başarıyla kaydedildi!",
-        token: token,
-    });
-});
-
-// Kullanıcı Giriş Endpoint’i
-app.post("/login", async (req, res) => {
-    const { email, password } = req.body;
-    if (!email || !password) {
-        return res.status(400).json({ error: "E-posta ve şifre gereklidir!" });
-    }
-
-    const user = await prisma.user.findUnique({
-        where: { email: email },
-    });
-
-    if (!user) {
-        return res.status(400).json({ error: "Kullanıcı bulunamadı!" });
-    }
-
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-    if (!isPasswordValid) {
-        return res.status(400).json({ error: "Geçersiz şifre!" });
-    }
-
-    const token = jwt.sign({ userId: user.id }, "secretkey", { expiresIn: "1h" });
-    return res.status(200).json({
-        message: "Giriş başarılı!",
-        token: token,
-    });
-});
-
-// Korumalı Kullanıcı Profili Endpoint’i
-app.get("/profile", verifyToken, async (req, res) => {
-    const userId = req.userId;
-    const user = await prisma.user.findUnique({
-        where: { id: userId },
-    });
-
-    if (!user) {
-        return res.status(404).json({ error: "Kullanıcı bulunamadı!" });
-    }
-
-    return res.status(200).json({
-        message: "Profil bilgileri başarıyla alındı!",
-        user: {
-            id: user.id,
-            username: user.username,
-            email: user.email,
-        },
-    });
-});
-
-// Arkadaş Ekleme Endpoint’i
-app.post("/connections", verifyToken, async (req, res) => {
-    const { friendId } = req.body;
-    const userId = req.userId;
-
-    // friendId var mı kontrol edelim
-    if (!friendId) {
-        return res.status(400).json({ error: "Arkadaş ID'si gereklidir!" });
-    }
-
-    // Kullanıcıların varlığını kontrol edelim
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    const friend = await prisma.user.findUnique({ where: { id: friendId } });
-
-    if (!user || !friend) {
-        return res.status(404).json({ error: "Kullanıcı veya arkadaş bulunamadı!" });
-    }
-
-    // Zaten arkadaşlık var mı kontrol edelim
-    const existingConnection = await prisma.connection.findFirst({
-        where: {
-            userId: userId,
-            friendId: friendId,
-        },
-    });
-
-    if (existingConnection) {
-        return res.status(400).json({ error: "Bu kullanıcı zaten arkadaşınız!" });
-    }
-
-    // Arkadaşlık ilişkisini ekleyelim
-    const connection = await prisma.connection.create({
-        data: {
-            userId: userId,
-            friendId: friendId,
-        },
-    });
-
-    return res.status(201).json({ message: "Arkadaş başarıyla eklendi!", connection });
-});
-
-// Arkadaş Listesi Endpoint’i
-app.get("/connections/:userId", verifyToken, async (req, res) => {
-    const { userId } = req.params;
-    const requesterId = req.userId;
-
-    // Yetki kontrolü: Sadece kendi arkadaş listeni görebilirsin
-    if (parseInt(userId) !== requesterId) {
-        return res.status(403).json({ error: "Yetkisiz erişim!" });
-    }
-
     try {
-        const connections = await prisma.connection.findMany({
-            where: { userId: parseInt(userId) },
-            include: {
-                friend: {
-                    select: { id: true, username: true, email: true }
-                }
-            }
-        });
+        const { username, email, password } = req.body;
 
-        const friends = connections.map(conn => conn.friend);
-        return res.status(200).json({ friends });
-    } catch (error) {
-        return res.status(500).json({ error: "Arkadaş listesi alınamadı!" });
-    }
-});
-
-// Arkadaş Silme Endpoint’i
-app.delete("/connections/:friendId", verifyToken, async (req, res) => {
-    const { friendId } = req.params;
-    const userId = req.userId;
-
-    try {
-        const connection = await prisma.connection.findFirst({
-            where: {
-                userId: userId,
-                friendId: parseInt(friendId),
-            },
-        });
-
-        if (!connection) {
-            return res.status(404).json({ error: "Arkadaşlık ilişkisi bulunamadı!" });
+        // Gerekli alanların kontrolü
+        if (!username || !email || !password) {
+            return res.status(400).json({ error: "Tüm alanlar gereklidir!" });
         }
 
-        await prisma.connection.delete({
-            where: { id: connection.id },
+        // E-posta benzersizlik kontrolü
+        const existingUser = await prisma.user.findUnique({
+            where: { email },
         });
 
-        return res.status(200).json({ message: "Arkadaş başarıyla silindi!" });
+        if (existingUser) {
+            return res.status(400).json({ error: "Bu e-posta zaten kayıtlı!" });
+        }
+
+        // Şifreyi hash'le ve kullanıcıyı kaydet
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const user = await prisma.user.create({
+            data: { username, email, password: hashedPassword },
+        });
+
+        // JWT token oluştur
+        const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '1h' });
+        res.json({ message: "Kullanıcı başarıyla kaydedildi!", token });
     } catch (error) {
-        return res.status(500).json({ error: "Arkadaş silme başarısız!" });
+        console.error("Register error:", error);
+        res.status(500).json({ error: "Kayıt sırasında bir hata oluştu!" });
     }
 });
 
+// Login endpoint
+app.post("/login", async (req, res) => {
+    try {
+        const { username, email, password } = req.body;
+
+        // Gerekli alanların kontrolü
+        if (!email || !password || !username) {
+            return res.status(400).json({ error: "E-posta ve şifre gereklidir!" });
+        }
+
+        // Kullanıcıyı bul ve şifreyi doğrula
+        const user = await prisma.user.findUnique({
+            where: { email },
+        });
+
+        if (!user || !(await bcrypt.compare(password, user.password))) {
+            return res.status(400).json({ error: "Geçersiz e-posta veya şifre!" });
+        }
+
+        // JWT token oluştur
+        const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '1h' });
+        res.json({ message: "Giriş başarılı!", token });
+    } catch (error) {
+        console.error("Login error:", error);
+        res.status(500).json({ error: "Giriş sırasında bir hata oluştu!" });
+    }
+});
+
+// Profile endpoint
+app.get("/profile", async (req, res) => {
+    try {
+        const token = req.headers.authorization?.split(' ')[1];
+        if (!token) return res.status(401).json({ error: "Yetkilendirme gerekli!" });
+
+        // Token'ı doğrula
+        const decoded = jwt.verify(token, JWT_SECRET);
+        const user = await prisma.user.findUnique({
+            where: { id: decoded.id },
+        });
+
+        if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı!" });
+
+        // Profil bilgilerini gönder
+        res.json({ user: { username: user.username, email: user.email } });
+    } catch (error) {
+        console.error("Profile error:", error);
+        if (error.name === 'JsonWebTokenError') {
+            return res.status(401).json({ error: "Geçersiz token!" });
+        }
+        res.status(500).json({ error: "Profil bilgisi alınırken bir hata oluştu!" });
+    }
+});
+
+// Sunucuyu başlat
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Sunucu ${PORT} portunda çalışıyor...`);
+});
+
+// Prisma bağlantı hatası yakalama
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    process.exit(1);
 });
