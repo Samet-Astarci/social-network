@@ -14,11 +14,8 @@ COPY . .
 # Prisma client'ı oluştur
 RUN npx prisma generate
 
-# Migration'ı canlı ortamda uygulamak için
-RUN npx prisma migrate deploy
-
 # Uygulamanın dışarıya açılacağı port
 EXPOSE 3000
 
-# Uygulamanın çalıştırılma komutu
-CMD ["node", "server.js"]
+# migrate deploy ve sunucuyu birlikte başlat
+CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
