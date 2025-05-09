@@ -10,7 +10,7 @@ const prisma = new PrismaClient();
 
 // CORS ve middleware ayarları
 app.use(cors({
-    origin: 'http://localhost:3001', // Frontend ile uyumlu CORS
+    origin: ['https://social-network-q2av.onrender.com', 'http://localhost:3001','http://localhost:3000'], // Frontend ile uyumlu CORS
     methods: ['GET', 'POST', 'DELETE'],
     credentials: true
 }));
