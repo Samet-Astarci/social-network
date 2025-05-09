@@ -20,6 +20,13 @@ app.use(express.static('public')); // Statik dosyaları (örneğin, frontend1.ht
 const JWT_SECRET = process.env.JWT_SECRET || 'secretkey';
 const PORT = process.env.PORT || 3001;
 
+const path = require("path");
+
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "frontend1.html"));
+});
+
+
 // Register endpoint
 app.post("/register", async (req, res) => {
     try {
