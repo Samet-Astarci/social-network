@@ -6,21 +6,13 @@
     "start": "node server.js"
   },
   "dependencies": {
-<<<<<<< HEAD
     "@prisma/client": "^6.7.0",
-=======
-    "@prisma/client": "^5.0.0",
->>>>>>> f18d1f131179e844057b858f2dbe38800051de26
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {
-<<<<<<< HEAD
     "prisma": "^6.7.0"
-=======
-    "prisma": "^5.22.0"
->>>>>>> f18d1f131179e844057b858f2dbe38800051de26
   }
 }
