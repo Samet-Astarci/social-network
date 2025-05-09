@@ -1,0 +1,53 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: 2005
+          POSTGRES_DB: social_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: "postgresql://postgres:2005@localhost:5432/social_db?schema=public"
+
+    steps:
+      - name: Repo'yu klonla
+        uses: actions/checkout@v3
+
+      - name: Node.js kur
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Bağımlılıkları yükle
+        run: npm install
+
+      - name: Prisma Generate
+        run: npx prisma generate
+
+      - name: Prisma Migrate (DB hazırlandıktan sonra tablo kurar)
+        run: npx prisma migrate deploy
+
+      - name: Testleri çalıştır (opsiyonel)
+        run: echo "Test yok ama burada unit testler çalıştırılabilir"
+
+      - name: Build tamamlandı
+        run: echo "CI başarıyla çalıştı!"

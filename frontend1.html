@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kullanıcı Girişi ve Profil</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f4f4f9;
+        }
+        .form-container {
+            max-width: 400px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        h2 {
+            text-align: center;
+        }
+        .form-input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .form-btn {
+            width: 100%;
+            padding: 10px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .form-btn:hover {
+            background-color: #0056b3;
+        }
+        .error {
+            color: red;
+            text-align: center;
+        }
+        #profile {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+<div id="loginForm" class="form-container">
+    <h2>Giriş Yap</h2>
+    <input type="username" id="loginUsername" class="form-input" placeholder="Kullanıcı adı" required>
+    <input type="email" id="loginEmail" class="form-input" placeholder="E-posta" required>
+    <input type="password" id="loginPassword" class="form-input" placeholder="Şifre" required>
+    <button class="form-btn" onclick="login()">Giriş Yap</button>
+    <p class="error" id="loginError"></p>
+    <p>Hesabınız yok mu? <a href="#" onclick="showRegister()">Kayıt Olun</a></p>
+</div>
+
+<div id="registerForm" class="form-container" style="display:none;">
+    <h2>Yeni Hesap Oluştur</h2>
+    <input type="text" id="registerUsername" class="form-input" placeholder="Kullanıcı Adı" required>
+    <input type="email" id="registerEmail" class="form-input" placeholder="E-posta" required>
+    <input type="password" id="registerPassword" class="form-input" placeholder="Şifre" required>
+    <button class="form-btn" onclick="register()">Kayıt Ol</button>
+    <p class="error" id="registerError"></p>
+    <p>Zaten bir hesabınız var mı? <a href="#" onclick="showLogin()">Giriş Yapın</a></p>
+</div>
+
+<div id="profile" class="form-container">
+    <h2>Profil Bilgileri</h2>
+    <p><strong>Kullanıcı Adı:</strong> <span id="profileUsername"></span></p>
+    <p><strong>E-posta:</strong> <span id="profileEmail"></span></p>
+    <button class="form-btn" onclick="logout()">Çıkış Yap</button>
+</div>
+
+<script>
+    const apiUrl = "http://localhost:3000"; // Backend API URL
+
+    // Giriş yapma fonksiyonu
+    function login() {
+        const username = document.getElementById("loginUsername").value;
+        const password = document.getElementById("loginPassword").value;
+        const email = document.getElementById("loginEmail").value;
+
+        if (!email || !password|| !username) {
+            document.getElementById("loginError").innerText = "E-posta ve şifre gereklidir!";
+            return;
+        }
+
+        fetch(`${apiUrl}/login`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ username,email, password })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.token) {
+                localStorage.setItem("token", data.token); // Token'ı localStorage'a kaydet
+                showProfile();
+            } else {
+                document.getElementById("loginError").innerText = data.error;
+            }
+        })
+        .catch(error => {
+        console.error("Hata:", error);  // Hata detayını konsola yazdırıyoruz
+        document.getElementById("loginError").innerText = `Bir hata oluştu: ${error.message}`;
+    });
+
+    }
+
+    // Yeni hesap oluşturma fonksiyonu
+    function register() {
+        const username = document.getElementById("registerUsername").value;
+        const email = document.getElementById("registerEmail").value;
+        const password = document.getElementById("registerPassword").value;
+
+        if (!username || !email || !password) {
+            document.getElementById("registerError").innerText = "Tüm alanlar gereklidir!";
+            return;
+        }
+
+        fetch(`${apiUrl}/register`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ username, email, password })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.token) {
+                localStorage.setItem("token", data.token); // Token'ı localStorage'a kaydet
+                showProfile();
+            } else {
+                document.getElementById("registerError").innerText = data.error;
+            }
+        })
+        .catch(error => {
+            document.getElementById("registerError").innerText = "Bir hata oluştu!";
+        });
+    }
+
+    // Profil bilgilerini gösterme fonksiyonu
+    function showProfile() {
+        const token = localStorage.getItem("token");
+
+        if (!token) {
+            return showLogin();
+        }
+
+        fetch(`${apiUrl}/profile`, {
+            method: "GET",
+            headers: {
+                "Authorization": `Bearer ${token}`
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.user) {
+                document.getElementById("profileUsername").innerText = data.user.username;
+                document.getElementById("profileEmail").innerText = data.user.email;
+                document.getElementById("loginForm").style.display = "none";
+                document.getElementById("registerForm").style.display = "none";
+                document.getElementById("profile").style.display = "block";
+            } else {
+                localStorage.removeItem("token");
+                showLogin();
+            }
+        })
+        .catch(error => {
+            localStorage.removeItem("token");
+            showLogin();
+        });
+    }
+
+    // Giriş yapma ekranını gösterme
+    function showLogin() {
+        document.getElementById("loginForm").style.display = "block";
+        document.getElementById("registerForm").style.display = "none";
+        document.getElementById("profile").style.display = "none";
+    }
+
+    // Kayıt olma ekranını gösterme
+    function showRegister() {
+        document.getElementById("loginForm").style.display = "none";
+        document.getElementById("registerForm").style.display = "block";
+        document.getElementById("profile").style.display = "none";
+    }
+
+    // Çıkış yapma fonksiyonu
+    function logout() {
+        localStorage.removeItem("token");
+        showLogin();
+    }
+
+    // Sayfa yüklendiğinde profil kontrolü yap
+    window.onload = () => {
+        showProfile();
+    };
+</script>
+
+</body>
+</html>
