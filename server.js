@@ -3,15 +3,23 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
+<<<<<<< HEAD
 const { findShortestPath, calculateBetweennessCentrality, detectCommunities, analyzeNetworkDensity, analyzeUserActivity } = require('./graphAlgorithms');
+=======
+>>>>>>> f18d1f131179e844057b858f2dbe38800051de26
 
 const app = express();
 const prisma = new PrismaClient();
 
 // CORS ve middleware ayarları
 app.use(cors({
+<<<<<<< HEAD
     origin: 'http://localhost:3001', // Frontend ile uyumlu CORS
     methods: ['GET', 'POST', 'DELETE'],
+=======
+    origin: 'http://localhost:3000', // Frontend ile uyumlu CORS
+    methods: ['GET', 'POST'],
+>>>>>>> f18d1f131179e844057b858f2dbe38800051de26
     credentials: true
 }));
 app.use(express.json());
@@ -106,6 +114,7 @@ app.get("/profile", async (req, res) => {
     }
 });
 
+<<<<<<< HEAD
 // Kullanıcı bilgilerini güncelleme
 app.put("/users/:userId/update", async (req, res) => {
     try {
@@ -957,6 +966,10 @@ app.get("/users/:userId/common-connections/:otherUserId", async (req, res) => {
 
 // Sunucuyu başlat
 const PORT = process.env.PORT || 3001;
+=======
+// Sunucuyu başlat
+const PORT = process.env.PORT || 3000;
+>>>>>>> f18d1f131179e844057b858f2dbe38800051de26
 app.listen(PORT, () => {
     console.log(`Sunucu ${PORT} portunda çalışıyor...`);
 });
