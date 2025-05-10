@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sosyal Ağ Görselleştirmesi</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f9;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        #network-container {
+            width: 100%;
+            height: 800px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            overflow: hidden;
+            position: relative;
+        }
+        .legend {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .legend-item {
+            margin: 5px 0;
+        }
+        .legend-color {
+            display: inline-block;
+            width: 15px;
+            height: 15px;
+            margin-right: 5px;
+            border-radius: 50%;
+        }
+        .controls {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .control-group {
+            flex: 1;
+            min-width: 200px;
+        }
+        .control-group h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        button {
+            padding: 8px 15px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        input {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #e9ecef;
+            border-radius: 4px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Sosyal Ağ Görselleştirmesi</h1>
+        
+        <div class="controls">
+            <div class="control-group">
+                <h3>Topluluk Analizi</h3>
+                <button onclick="analyzeCommunities()">Toplulukları Tespit Et</button>
+                <div id="community-result" class="result"></div>
+            </div>
+            
+            <div class="control-group">
+                <h3>En Kısa Yol Analizi</h3>
+                <input type="number" id="startNode" placeholder="Başlangıç ID">
+                <input type="number" id="endNode" placeholder="Bitiş ID">
+                <button onclick="findShortestPath()">En Kısa Yolu Bul</button>
+                <div id="path-result" class="result"></div>
+            </div>
+
+            <div class="control-group">
+                <h3>Graf Analizi</h3>
+                <button onclick="analyzeGraph()">Graf Analizini Yap</button>
+                <div id="graph-analysis-result" class="result"></div>
+            </div>
+        </div>
+
+        <div id="network-container"></div>
+    </div>
+
+    <div class="legend">
+        <div class="legend-item">
+            <div class="legend-color" style="background: #ff0000;"></div>
+            <span>En Yüksek Bağlantılı 5 Düğüm</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #ffa500;"></div>
+            <span>Merkez Düğüm</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #ffd700;"></div>
+            <span>4+ Bağlantılı Düğümler</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #1f77b4;"></div>
+            <span>Normal Düğüm</span>
+        </div>
+    </div>
+
+    <script src="network_data.js"></script>
+    <script>
+        // Topluluk analizi fonksiyonu
+        async function analyzeCommunities() {
+            try {
+                const response = await fetch('http://localhost:3001/api/analyze-communities');
+                const data = await response.json();
+                
+                const resultDiv = document.getElementById('community-result');
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = `
+                    <h4>Topluluk Analizi Sonuçları:</h4>
+                    <p>Topluluk Sayısı: ${data.communities.length}</p>
+                    <p>Modülerlik Skoru: ${data.modularity.toFixed(4)}</p>
+                    <p>En Büyük Topluluk: ${Math.max(...data.communities.map(c => c.length))} düğüm</p>
+                `;
+            } catch (error) {
+                console.error('Topluluk analizi hatası:', error);
+                alert('Topluluk analizi sırasında bir hata oluştu.');
+            }
+        }
+
+        // En kısa yol analizi fonksiyonu
+        async function findShortestPath() {
+            const startNode = document.getElementById('startNode').value;
+            const endNode = document.getElementById('endNode').value;
+
+            if (!startNode || !endNode) {
+                alert('Lütfen başlangıç ve bitiş düğümlerini girin.');
+                return;
+            }
+
+            try {
+                const response = await fetch(`http://localhost:3001/api/shortest-path?start=${startNode}&end=${endNode}`);
+                const data = await response.json();
+                
+                const resultDiv = document.getElementById('path-result');
+                resultDiv.style.display = 'block';
+                
+                if (data.path) {
+                    resultDiv.innerHTML = `
+                        <h4>En Kısa Yol Sonuçları:</h4>
+                        <p>Yol: ${data.path.join(' → ')}</p>
+                        <p>Mesafe: ${data.distance} adım</p>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <h4>Sonuç:</h4>
+                        <p>Bu iki düğüm arasında yol bulunamadı.</p>
+                    `;
+                }
+            } catch (error) {
+                console.error('En kısa yol analizi hatası:', error);
+                alert('En kısa yol analizi sırasında bir hata oluştu.');
+            }
+        }
+
+        // Graf analizi fonksiyonu
+        async function analyzeGraph() {
+            try {
+                const response = await fetch('http://localhost:3001/api/analyze-graph');
+                const data = await response.json();
+                
+                const resultDiv = document.getElementById('graph-analysis-result');
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = `
+                    <h4>Graf Analizi Sonuçları:</h4>
+                    <p>Toplam Düğüm Sayısı: ${data.totalNodes}</p>
+                    <p>Toplam Bağlantı Sayısı: ${data.totalEdges}</p>
+                    <p>Ortalama Bağlantı Sayısı: ${data.averageDegree.toFixed(2)}</p>
+                    <p>Ağ Yoğunluğu: ${data.density.toFixed(4)}</p>
+                    <p>En Yüksek Bağlantılı Düğüm: ${data.highestDegreeNode.id} (${data.highestDegreeNode.degree} bağlantı)</p>
+                    <p>En Düşük Bağlantılı Düğüm: ${data.lowestDegreeNode.id} (${data.lowestDegreeNode.degree} bağlantı)</p>
+                `;
+            } catch (error) {
+                console.error('Graf analizi hatası:', error);
+                alert('Graf analizi sırasında bir hata oluştu.');
+            }
+        }
+    </script>
+</body>
+</html> 

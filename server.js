@@ -4,13 +4,19 @@ const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const { PrismaClient } = require('@prisma/client');
 const { findShortestPath, calculateBetweennessCentrality, detectCommunities, analyzeNetworkDensity, analyzeUserActivity } = require('./graphAlgorithms');
+const fs = require('fs');
 
 const app = express();
 const prisma = new PrismaClient();
 
 // CORS ve middleware ayarları
 app.use(cors({
-    origin: ['https://social-network-q2av.onrender.com', 'http://localhost:3001','http://localhost:3000'], // Frontend ile uyumlu CORS
+    origin: [
+        'https://social-network-q2av.onrender.com',
+        'http://localhost:3001',
+        'http://localhost:3000',
+        'http://127.0.0.1:5500'
+    ], // Frontend ile uyumlu CORS
     methods: ['GET', 'POST', 'DELETE'],
     credentials: true
 }));
@@ -961,6 +967,153 @@ app.get("/users/:userId/common-connections/:otherUserId", async (req, res) => {
         console.error("Common connections error:", error);
         res.status(500).json({ error: "Ortak bağlantılar alınırken bir hata oluştu!" });
     }
+});
+
+// --- DOSYADAN OKUYAN YENİ API ENDPOINTLERİ ---
+
+// Ağ verisini dosyadan oku ve bellekte graf oluştur
+function loadGraphFromFile() {
+    const data = fs.readFileSync('public/datasheetfrom_facebok.txt', 'utf-8');
+    const lines = data.trim().split('\n');
+    const graph = new Map();
+    
+    // İlk 15000 satırı al
+    const firstLines = lines.slice(0, 15000);
+    const selectedLines = [];
+    
+    // Her 10 satırdan rastgele birini seç
+    for (let i = 0; i < firstLines.length; i += 10) {
+        const group = firstLines.slice(i, Math.min(i + 10, firstLines.length));
+        if (group.length > 0) {
+            const randomIndex = Math.floor(Math.random() * group.length);
+            selectedLines.push(group[randomIndex]);
+        }
+    }
+    
+    // Seçilen satırları işle
+    for (const line of selectedLines) {
+        const [u, v] = line.split(/[,\s]+/).map(Number);
+        if (!isNaN(u) && !isNaN(v)) {
+            if (!graph.has(u)) graph.set(u, new Set());
+            if (!graph.has(v)) graph.set(v, new Set());
+            graph.get(u).add(v);
+            graph.get(v).add(u);
+        }
+    }
+    return graph;
+}
+
+// Ağ verisini JSON olarak döndür
+app.get('/api/network-data', (req, res) => {
+    try {
+        const graph = loadGraphFromFile();
+        
+        // Bağlantı sayılarını hesapla
+        const nodeConnections = new Map();
+        graph.forEach((neighbors, id) => {
+            nodeConnections.set(id, neighbors.size);
+        });
+        
+        // Bağlantı sayılarına göre düğümleri sırala
+        const sortedNodes = Array.from(nodeConnections.entries())
+            .sort((a, b) => b[1] - a[1]);
+        
+        // En yüksek bağlantıya sahip 5 düğümün ID'lerini al
+        const top5NodeIds = new Set(sortedNodes.slice(0, 5).map(([id]) => id));
+        
+        // Düğümleri oluştur
+        const nodes = Array.from(graph.keys()).map(id => {
+            const connectionCount = nodeConnections.get(id);
+            const isTop5 = top5NodeIds.has(id);
+            const isCentral = id === 0;
+            const hasHighConnections = connectionCount >= 4;
+            
+            // Düğüm boyutunu bağlantı sayısına göre hesapla
+            const baseSize = Math.sqrt(connectionCount) * 2;
+            const size = isTop5 ? baseSize * 1.5 : baseSize;
+            
+            // Düğüm rengini belirle
+            let color;
+            if (isTop5) {
+                color = "#ff0000"; // En yüksek bağlantılı 5 düğüm
+            } else if (isCentral) {
+                color = "#ffa500"; // Merkez düğüm
+            } else if (hasHighConnections) {
+                color = "#ffd700"; // 4 ve üzeri bağlantısı olan düğümler (sarı)
+            } else {
+                color = "#1f77b4"; // Normal düğümler
+            }
+            
+            return {
+                id,
+                connectionCount,
+                isCentral,
+                isTop5,
+                hasHighConnections,
+                size: Math.min(30, Math.max(10, size)), // Boyut sınırlaması
+                color
+            };
+        });
+        
+        // Bağlantıları oluştur
+        const links = [];
+        graph.forEach((neighbors, source) => {
+            neighbors.forEach(target => {
+                // Her bağlantıyı sadece bir kez ekle
+                if (source < target) {
+                    const isTop5Connection = top5NodeIds.has(source) && top5NodeIds.has(target);
+                    links.push({
+                        source,
+                        target,
+                        isTop5Connection
+                    });
+                }
+            });
+        });
+
+        res.json({ nodes, links });
+    } catch (error) {
+        console.error('Ağ verisi oluşturma hatası:', error);
+        res.status(500).json({ error: 'Ağ verisi oluşturulurken bir hata oluştu' });
+    }
+});
+
+// Basit topluluk tespiti (her düğüm kendi topluluğunda)
+app.get('/api/communities', (req, res) => {
+    const graph = loadGraphFromFile();
+    // Basit örnek: her düğüm kendi topluluğunda
+    const communities = {};
+    graph.forEach((_, id) => { communities[id] = id; });
+    res.json({ communities, modularity: 0 });
+});
+
+// En kısa yol (Dijkstra)
+app.get('/api/shortest-path', (req, res) => {
+    const { from, to } = req.query;
+    const graph = loadGraphFromFile();
+    const start = Number(from), end = Number(to);
+    if (!graph.has(start) || !graph.has(end)) return res.json({ path: [], totalWeight: -1 });
+
+    // Dijkstra
+    const dist = {}, prev = {}, queue = new Set(graph.keys());
+    graph.forEach((_, id) => { dist[id] = Infinity; prev[id] = null; });
+    dist[start] = 0;
+    while (queue.size) {
+        let u = Array.from(queue).reduce((a, b) => dist[a] < dist[b] ? a : b);
+        queue.delete(u);
+        if (u == end) break;
+        graph.get(u).forEach(v => {
+            if (!queue.has(v)) return;
+            let alt = dist[u] + 1;
+            if (alt < dist[v]) { dist[v] = alt; prev[v] = u; }
+        });
+    }
+    // Yol oluştur
+    let path = [], u = end;
+    if (prev[u] !== null || u == start) {
+        while (u !== null) { path.unshift(u); u = prev[u]; }
+    }
+    res.json({ path, totalWeight: dist[end] });
 });
 
 // Sunucuyu başlat
