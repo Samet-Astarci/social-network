@@ -29,6 +29,15 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
+try {
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+  });
+} catch (error) {
+  console.error("💥 Route registration error:", error.message);
+}
+
+
 // Graf verisini yükle ve bellekte tut
 function initializeGraph() {
     if (globalGraph) return globalGraph;
