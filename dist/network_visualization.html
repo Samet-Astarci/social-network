@@ -137,11 +137,76 @@
         .cancel-button:hover {
             background-color: #c82333;
         }
+        .color-legend {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            max-width: 300px;
+            z-index: 1000;
+        }
+        .color-legend h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+            font-size: 16px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        .color-box {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            border-radius: 4px;
+            border: 1px solid rgba(0, 0, 0, 0.1);
+        }
+        .legend-text {
+            font-size: 14px;
+            color: #444;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Sosyal Ağ Görselleştirmesi</h1>
+        
+        <div class="color-legend">
+            <h4>Renk Açıklamaları</h4>
+            <div class="legend-item">
+                <div class="color-box" style="background-color: #ff0000;"></div>
+                <span class="legend-text">En önemli düğümler (15+ bağlantı)</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background-color: #ffa500;"></div>
+                <span class="legend-text">Merkezi düğümler (12+ bağlantı)</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background-color: #ffd700;"></div>
+                <span class="legend-text">Yüksek bağlantılı düğümler (8+ bağlantı)</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background-color: #1f77b4;"></div>
+                <span class="legend-text">Normal düğümler</span>
+            </div>
+            <h4 style="margin-top: 15px;">Bağlantı Renkleri</h4>
+            <div class="legend-item">
+                <div class="color-box" style="background-color: #ff4444;"></div>
+                <span class="legend-text">En önemli bağlantılar</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background-color: #ffa07a;"></div>
+                <span class="legend-text">Önemli bağlantılar</span>
+            </div>
+            <div class="legend-item">
+                <div class="color-box" style="background-color: #999999;"></div>
+                <span class="legend-text">Normal bağlantılar</span>
+            </div>
+        </div>
         
         <div class="controls">
             <div class="community-controls">
@@ -152,7 +217,17 @@
                 <input type="number" id="startNode" placeholder="Başlangıç ID">
                 <input type="number" id="endNode" placeholder="Bitiş ID">
                 <button onclick="findShortestPath()" class="control-button">En Kısa Yol Bul</button>
+                <button onclick="resetShortestPath()" class="control-button cancel-button">İptal</button>
             </div>
+            <div class="graph-analysis-controls">
+                <button onclick="showGraphAnalysis()" class="control-button">Graf Analizi</button>
+                <button onclick="resetGraphAnalysis()" class="control-button cancel-button">İptal</button>
+            </div>
+        </div>
+
+        <div id="graph-analysis-result" class="result-panel">
+            <h3>Graf Analizi Sonuçları</h3>
+            <div id="graph-stats"></div>
         </div>
 
         <div id="community-result" class="result-panel">
@@ -244,10 +319,41 @@
 
             // Force-directed layout oluştur
             simulation = d3.forceSimulation(nodes)
-                .force('link', d3.forceLink(linkData).id(d => d.id).distance(50))
-                .force('charge', d3.forceManyBody().strength(-100))
+                .force('link', d3.forceLink(linkData)
+                    .id(d => d.id)
+                    .distance(d => {
+                        const sourceNode = nodes.find(n => n.id === d.source.id);
+                        const targetNode = nodes.find(n => n.id === d.target.id);
+                        
+                        // Önemli düğümler arasındaki mesafeyi artır
+                        if (sourceNode.isTop5 && targetNode.isTop5) return 300;
+                        if (sourceNode.isCentral || targetNode.isCentral) return 250;
+                        if (sourceNode.hasHighConnections || targetNode.hasHighConnections) return 200;
+                        return 150; // Normal düğümler arası minimum mesafe
+                    })
+                )
+                .force('charge', d3.forceManyBody()
+                    .strength(d => {
+                        // Düğümlerin birbirini itme kuvvetini artır
+                        if (d.isTop5) return -1000;
+                        if (d.isCentral) return -800;
+                        if (d.hasHighConnections) return -600;
+                        return -400;
+                    })
+                )
                 .force('center', d3.forceCenter(width / 2, height / 2))
-                .force('collision', d3.forceCollide().radius(d => d.size + 5));
+                .force('collision', d3.forceCollide()
+                    .radius(d => {
+                        // Çarpışma yarıçapını artır
+                        if (d.isTop5) return d.size + 100;
+                        if (d.isCentral) return d.size + 80;
+                        if (d.hasHighConnections) return d.size + 60;
+                        return d.size + 40;
+                    })
+                    .strength(1)
+                )
+                .force('x', d3.forceX(width / 2).strength(0.02))
+                .force('y', d3.forceY(height / 2).strength(0.02));
 
             // Bağlantıları çiz
             linkElements = g.append('g')
@@ -255,9 +361,105 @@
                 .data(linkData)
                 .enter()
                 .append('line')
-                .attr('stroke', '#999')
-                .attr('stroke-opacity', 0.6)
-                .attr('stroke-width', d => d.isTop5Connection ? 3 : 1);
+                .attr('stroke', d => {
+                    const sourceNode = nodes.find(n => n.id === d.source.id);
+                    const targetNode = nodes.find(n => n.id === d.target.id);
+                    
+                    if (sourceNode.isTop5 && targetNode.isTop5) {
+                        return '#ff4444';
+                    } else if ((sourceNode.isCentral && targetNode.isCentral) ||
+                             (sourceNode.isTop5 && targetNode.isCentral) ||
+                             (sourceNode.isCentral && targetNode.isTop5)) {
+                        return '#ffa07a';
+                    } else {
+                        return '#999999';
+                    }
+                })
+                .attr('stroke-opacity', d => {
+                    const sourceNode = nodes.find(n => n.id === d.source.id);
+                    const targetNode = nodes.find(n => n.id === d.target.id);
+                    
+                    if (sourceNode.isTop5 && targetNode.isTop5) return 0.8;
+                    if (sourceNode.isCentral || targetNode.isCentral) return 0.6;
+                    return 0.4;
+                })
+                .attr('stroke-width', d => {
+                    const sourceNode = nodes.find(n => n.id === d.source.id);
+                    const targetNode = nodes.find(n => n.id === d.target.id);
+                    
+                    if (sourceNode.isTop5 && targetNode.isTop5) return 3;
+                    if (sourceNode.isCentral || targetNode.isCentral) return 2;
+                    return 1;
+                })
+                .on('mouseover', function(event, d) {
+                    const sourceNode = nodes.find(n => n.id === d.source.id);
+                    const targetNode = nodes.find(n => n.id === d.target.id);
+                    
+                    tooltip.transition()
+                        .duration(200)
+                        .style('opacity', .9);
+                    tooltip.html(`
+                        <strong>Bağlantı Bilgisi:</strong><br/>
+                        <strong>Kaynak Düğüm:</strong> ${sourceNode.id}<br/>
+                        <strong>Hedef Düğüm:</strong> ${targetNode.id}<br/>
+                        <strong>Kaynak Bağlantı Sayısı:</strong> ${sourceNode.connectionCount}<br/>
+                        <strong>Hedef Bağlantı Sayısı:</strong> ${targetNode.connectionCount}
+                    `)
+                        .style('left', (event.pageX + 10) + 'px')
+                        .style('top', (event.pageY - 28) + 'px');
+
+                    // Bağlantıyı ve ilgili düğümleri vurgula
+                    d3.select(this)
+                        .attr('stroke-opacity', 1)
+                        .attr('stroke-width', d => {
+                            const sourceNode = nodes.find(n => n.id === d.source.id);
+                            const targetNode = nodes.find(n => n.id === d.target.id);
+                            
+                            if (sourceNode.isTop5 && targetNode.isTop5) return 5;
+                            if (sourceNode.isCentral || targetNode.isCentral) return 4;
+                            return 3;
+                        });
+
+                    // İlgili düğümleri vurgula
+                    nodeElements
+                        .filter(n => n.id === sourceNode.id || n.id === targetNode.id)
+                        .attr('stroke', '#ff0000')
+                        .attr('stroke-width', 3);
+                })
+                .on('mouseout', function(event, d) {
+                    tooltip.transition()
+                        .duration(500)
+                        .style('opacity', 0);
+
+                    // Bağlantıyı normal haline getir
+                    d3.select(this)
+                        .attr('stroke-opacity', d => {
+                            const sourceNode = nodes.find(n => n.id === d.source.id);
+                            const targetNode = nodes.find(n => n.id === d.target.id);
+                            
+                            if (sourceNode.isTop5 && targetNode.isTop5) return 0.8;
+                            if (sourceNode.isCentral || targetNode.isCentral) return 0.6;
+                            return 0.4;
+                        })
+                        .attr('stroke-width', d => {
+                            const sourceNode = nodes.find(n => n.id === d.source.id);
+                            const targetNode = nodes.find(n => n.id === d.target.id);
+                            
+                            if (sourceNode.isTop5 && targetNode.isTop5) return 3;
+                            if (sourceNode.isCentral || targetNode.isCentral) return 2;
+                            return 1;
+                        });
+
+                    // Düğümleri normal haline getir
+                    nodeElements
+                        .attr('stroke', d => {
+                            if (d.isTop5) return '#ff0000';
+                            if (d.isCentral) return '#ffa500';
+                            if (d.hasHighConnections) return '#ffd700';
+                            return '#fff';
+                        })
+                        .attr('stroke-width', d => d.isTop5 ? 3 : 2);
+                });
 
             // Düğümleri çiz
             nodeElements = g.append('g')
@@ -265,7 +467,18 @@
                 .data(nodes)
                 .enter()
                 .append('circle')
-                .attr('r', d => d.size || 5)
+                .attr('r', d => {
+                    const baseSize = Math.sqrt(d.connectionCount) * 4;
+                    if (d.isTop5) {
+                        return Math.min(60, Math.max(25, baseSize * 1.5));
+                    } else if (d.isCentral) {
+                        return Math.min(50, Math.max(20, baseSize * 1.2));
+                    } else if (d.hasHighConnections) {
+                        return Math.min(45, Math.max(18, baseSize));
+                    } else {
+                        return Math.min(40, Math.max(15, baseSize));
+                    }
+                })
                 .attr('fill', d => d.color)
                 .call(drag(simulation));
 
@@ -276,9 +489,18 @@
                 .enter()
                 .append('text')
                 .text(d => d.id)
-                .attr('font-size', '8px')
-                .attr('dx', 8)
-                .attr('dy', 3);
+                .attr('font-size', d => {
+                    if (d.isTop5) return '16px';
+                    if (d.isCentral) return '14px';
+                    if (d.hasHighConnections) return '12px';
+                    return '11px';
+                })
+                .attr('dx', d => {
+                    if (d.isTop5) return 12;
+                    if (d.isCentral) return 10;
+                    return 8;
+                })
+                .attr('dy', 4);
 
             // Simülasyonu güncelle
             simulation.on('tick', () => {
@@ -585,6 +807,84 @@
             
             // Simülasyonu yeniden başlat
             simulation.alpha(0.3).restart();
+        }
+
+        // Graf analizi fonksiyonu
+        async function showGraphAnalysis() {
+            try {
+                // Graf istatistiklerini hesapla
+                const nodeCount = nodes.length;
+                const linkCount = links.length;
+                const avgDegree = (2 * linkCount / nodeCount).toFixed(2);
+                
+                // En yüksek bağlantılı düğümleri bul
+                const topNodes = [...nodes]
+                    .sort((a, b) => b.connectionCount - a.connectionCount)
+                    .slice(0, 5);
+                
+                // İzole düğümleri say
+                const isolatedNodes = nodes.filter(node => 
+                    !links.some(link => 
+                        link.source.id === node.id || link.target.id === node.id
+                    )
+                ).length;
+                
+                // Sonuçları göster
+                const resultDiv = document.getElementById('graph-stats');
+                resultDiv.innerHTML = `
+                    <div class="community-info">
+                        <div class="community-stat">
+                            <span>Toplam Düğüm Sayısı:</span>
+                            <strong>${nodeCount}</strong>
+                        </div>
+                        <div class="community-stat">
+                            <span>Toplam Bağlantı Sayısı:</span>
+                            <strong>${linkCount}</strong>
+                        </div>
+                        <div class="community-stat">
+                            <span>Ortalama Bağlantı Derecesi:</span>
+                            <strong>${avgDegree}</strong>
+                        </div>
+                        <div class="community-stat">
+                            <span>İzole Düğüm Sayısı:</span>
+                            <strong>${isolatedNodes}</strong>
+                        </div>
+                        <div class="community-stat">
+                            <span>En Yüksek Bağlantılı Düğümler:</span>
+                            <strong>${topNodes.map(n => `${n.id} (${n.connectionCount} bağlantı)`).join(', ')}</strong>
+                        </div>
+                    </div>
+                `;
+                
+                // Analiz panelini göster
+                document.getElementById('graph-analysis-result').style.display = 'block';
+                
+            } catch (error) {
+                console.error('Graf analizi hatası:', error);
+                alert('Graf analizi sırasında bir hata oluştu: ' + error.message);
+            }
+        }
+
+        // Graf analizi sıfırlama fonksiyonu
+        function resetGraphAnalysis() {
+            // Graf analizi panelini gizle
+            document.getElementById('graph-analysis-result').style.display = 'none';
+            
+            // Graf istatistiklerini temizle
+            document.getElementById('graph-stats').innerHTML = '';
+        }
+
+        // En kısa yol analizini sıfırlama fonksiyonu
+        function resetShortestPath() {
+            // En kısa yol sonuç panelini gizle
+            document.getElementById('shortest-path-result').style.display = 'none';
+            
+            // Input alanlarını temizle
+            document.getElementById('startNode').value = '';
+            document.getElementById('endNode').value = '';
+            
+            // Vurgulamaları sıfırla
+            resetPathHighlight();
         }
 
         // Sayfa yüklendiğinde ağı başlat
