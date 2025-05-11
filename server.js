@@ -2,54 +2,17 @@ const express = require('express');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
-const { PrismaClient } = require('@prisma/client');
-const { findShortestPath, calculateBetweennessCentrality, detectCommunities, analyzeNetworkDensity, analyzeUserActivity } = require('./graphAlgorithms');
 const fs = require('fs');
 
 const app = express();
-const prisma = new PrismaClient();
 
 // Global graf değişkeni
 let globalGraph = null;
 
-// Graf verisini yükle ve bellekte tut
-function initializeGraph() {
-    if (globalGraph) return globalGraph;
-    
-    const data = fs.readFileSync('public/datasheetfrom_facebok.txt', 'utf-8');
-    const lines = data.trim().split('\n');
-    const graph = new Map();
-    
-    // İlk 1500 satırı al
-    const selectedLines = lines.slice(0, 1500);
-    
-    // Satırları işle
-    for (const line of selectedLines) {
-        const [u, v] = line.split(/[,\s]+/).map(Number);
-        if (!isNaN(u) && !isNaN(v)) {
-            if (!graph.has(u)) graph.set(u, new Set());
-            if (!graph.has(v)) graph.set(v, new Set());
-            graph.get(u).add(v);
-            graph.get(v).add(u);
-        }
-    }
-    
-    globalGraph = graph;
-    return graph;
-}
-
-// Sunucu başlatıldığında grafı yükle
-initializeGraph();
-
 // CORS ve middleware ayarları
 app.use(cors({
-    origin: [
-        'https://social-network-q2av.onrender.com',
-        'http://localhost:3001',
-        'http://localhost:3000',
-        'http://127.0.0.1:5500'
-    ], // Frontend ile uyumlu CORS
-    methods: ['GET', 'POST', 'DELETE'],
+    origin: ['http://127.0.0.1:5500', 'http://localhost:3001', 'http://localhost:3000'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
 }));
 app.use(express.json());
@@ -64,6 +27,177 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "frontend1.html"));
 });
 
+// Graf verisini yükle ve bellekte tut
+function initializeGraph() {
+    if (globalGraph) return globalGraph;
+    
+    try {
+        const data = fs.readFileSync('public/datasheetfrom_facebok.txt', 'utf-8');
+        const lines = data.trim().split('\n');
+        const graph = new Map();
+        
+        // İlk 2000 satırı al
+        const selectedLines = lines.slice(0, 2000);
+        
+        // Satırları işle
+        for (const line of selectedLines) {
+            const [u, v] = line.split(/[,\s]+/).map(Number);
+            if (!isNaN(u) && !isNaN(v)) {
+                if (!graph.has(u)) graph.set(u, new Set());
+                if (!graph.has(v)) graph.set(v, new Set());
+                graph.get(u).add(v);
+                graph.get(v).add(u);
+            }
+        }
+        
+        globalGraph = graph;
+        return graph;
+    } catch (error) {
+        console.error("Graf yükleme hatası:", error);
+        throw new Error("Graf verisi yüklenemedi!");
+    }
+}
+
+// Sunucu başlatıldığında grafı yükle
+initializeGraph();
+
+// Topluluk tespiti fonksiyonu
+function detectCommunities(graph) {
+    // Her düğüm başlangıçta kendi topluluğunda
+    let communities = {};
+    const nodes = Array.from(graph.keys());
+    nodes.forEach(node => {
+        communities[node] = node;
+    });
+
+    // Toplam ağırlığı hesapla
+    let totalWeight = 0;
+    nodes.forEach(node => {
+        graph.get(node).forEach(() => totalWeight++);
+    });
+    totalWeight /= 2; // Her bağlantı iki kez sayıldığı için
+
+    let modularity = calculateModularity(graph, communities, totalWeight);
+    let improved = true;
+    let iterations = 0;
+
+    while (improved && iterations < 100) {
+        improved = false;
+        iterations++;
+
+        // Faz 1: Düğümleri en iyi topluluklara yerleştir
+        for (const node of nodes) {
+            const currentCommunity = communities[node];
+            const neighborCommunities = getNeighborCommunities(node, graph, communities);
+            let bestCommunity = currentCommunity;
+            let bestGain = 0;
+
+            // Komşu toplulukları değerlendir
+            neighborCommunities.forEach(community => {
+                const gain = calculateModularityGain(
+                    node, 
+                    community, 
+                    graph, 
+                    communities, 
+                    totalWeight
+                );
+
+                if (gain > bestGain) {
+                    bestGain = gain;
+                    bestCommunity = community;
+                }
+            });
+
+            // Eğer daha iyi bir topluluk bulunduysa değiştir
+            if (bestCommunity !== currentCommunity) {
+                communities[node] = bestCommunity;
+                improved = true;
+            }
+        }
+
+        // Faz 2: Toplulukları birleştir
+        if (improved) {
+            communities = aggregateCommunities(communities);
+            modularity = calculateModularity(graph, communities, totalWeight);
+        }
+    }
+
+    return {
+        communities,
+        modularity
+    };
+}
+
+// Komşu toplulukları bul
+function getNeighborCommunities(node, graph, communities) {
+    const neighborCommunities = new Set();
+    graph.get(node).forEach(neighbor => {
+        neighborCommunities.add(communities[neighbor]);
+    });
+    return neighborCommunities;
+}
+
+// Modülerlik kazancını hesapla
+function calculateModularityGain(node, targetCommunity, graph, communities, totalWeight) {
+    let k_i = 0;          // Düğümün toplam ağırlığı
+    let k_i_in = 0;       // Hedef toplulukla olan bağlantıların ağırlığı
+    let sum_tot = 0;      // Hedef topluluğun toplam ağırlığı
+
+    // Düğümün bağlantılarını hesapla
+    graph.get(node).forEach((neighbor) => {
+        k_i++;
+        if (communities[neighbor] === targetCommunity) {
+            k_i_in++;
+        }
+    });
+
+    // Hedef topluluğun toplam ağırlığını hesapla
+    Object.entries(communities).forEach(([n, comm]) => {
+        if (comm === targetCommunity) {
+            graph.get(parseInt(n)).forEach(() => sum_tot++);
+        }
+    });
+
+    // Modülerlik kazancını hesapla
+    const gain = (k_i_in / (2 * totalWeight)) -
+                (sum_tot * k_i) / (4 * totalWeight * totalWeight);
+
+    return gain;
+}
+
+// Modülerlik hesapla
+function calculateModularity(graph, communities, totalWeight) {
+    let modularity = 0;
+    const nodes = Array.from(graph.keys());
+
+    nodes.forEach(i => {
+        nodes.forEach(j => {
+            if (communities[i] === communities[j]) {
+                const actual = graph.get(i).has(j) ? 1 : 0;
+                const expected = (graph.get(i).size * graph.get(j).size) / (2 * totalWeight);
+                modularity += actual - expected;
+            }
+        });
+    });
+
+    return modularity / (2 * totalWeight);
+}
+
+// Toplulukları birleştir
+function aggregateCommunities(communities) {
+    const uniqueCommunities = [...new Set(Object.values(communities))];
+    const newCommunities = {};
+    
+    uniqueCommunities.forEach((oldId, newId) => {
+        Object.entries(communities).forEach(([node, community]) => {
+            if (community === oldId) {
+                newCommunities[node] = newId;
+            }
+        });
+    });
+    
+    return newCommunities;
+}
 
 // Register endpoint
 app.post("/register", async (req, res) => {
@@ -677,23 +811,69 @@ app.get("/users/:userId/statistics", async (req, res) => {
 // Graf analizi endpoint'leri
 
 // En kısa yol analizi endpoint'i
-app.get("/analysis/shortest-path", async (req, res) => {
+app.get("/api/shortest-path", async (req, res) => {
     try {
         const { from, to } = req.query;
+        const graph = globalGraph || initializeGraph();
 
         if (!from || !to) {
-            return res.status(400).json({ error: "Başlangıç ve bitiş kullanıcı ID'leri gereklidir!" });
+            return res.status(400).json({ error: "Başlangıç ve bitiş düğümleri gereklidir!" });
         }
 
-        const result = await findShortestPath(parseInt(from), parseInt(to));
+        const start = parseInt(from), end = parseInt(to);
+        
+        if (!graph.has(start) || !graph.has(end)) {
+            return res.json({ path: [], totalWeight: -1 });
+        }
+
+        // Dijkstra algoritması
+        const dist = new Map();
+        const prev = new Map();
+        const queue = new Set(graph.keys());
+
+        // Başlangıç değerlerini ayarla
+        for (const node of graph.keys()) {
+            dist.set(node, Infinity);
+            prev.set(node, null);
+        }
+        dist.set(start, 0);
+
+        while (queue.size > 0) {
+            // En küçük mesafeli düğümü bul
+            let u = Array.from(queue).reduce((a, b) => dist.get(a) < dist.get(b) ? a : b);
+            queue.delete(u);
+
+            if (u === end) break; // Hedef düğüme ulaştık
+
+            // Komşuları kontrol et
+            for (const v of graph.get(u)) {
+                if (!queue.has(v)) continue;
+                
+                const alt = dist.get(u) + 1; // Kenar ağırlığı 1
+                if (alt < dist.get(v)) {
+                    dist.set(v, alt);
+                    prev.set(v, u);
+                }
+            }
+        }
+
+        // Yolu oluştur
+        const path = [];
+        let current = end;
+        if (prev.get(current) !== null || current === start) {
+            while (current !== null) {
+                path.unshift(current);
+                current = prev.get(current);
+            }
+        }
+
         res.json({
-            message: "En kısa yol başarıyla hesaplandı",
-            path: result.path,
-            distance: result.distance
+            path,
+            totalWeight: dist.get(end)
         });
     } catch (error) {
-        console.error("Shortest path error:", error);
-        res.status(500).json({ error: error.message || "En kısa yol hesaplanırken bir hata oluştu!" });
+        console.error("En kısa yol hesaplama hatası:", error);
+        res.status(500).json({ error: "En kısa yol hesaplanırken bir hata oluştu!" });
     }
 });
 
@@ -712,9 +892,11 @@ app.get("/analysis/betweenness", async (req, res) => {
 });
 
 // Topluluk tespiti endpoint'i
-app.get("/analysis/communities", async (req, res) => {
+app.get("/api/analysis/communities", async (req, res) => {
     try {
-        const result = await detectCommunities();
+        const graph = globalGraph || initializeGraph();
+        const result = detectCommunities(graph);
+        
         res.json({
             message: "Topluluklar başarıyla tespit edildi",
             communities: result.communities,
@@ -722,7 +904,10 @@ app.get("/analysis/communities", async (req, res) => {
         });
     } catch (error) {
         console.error("Community detection error:", error);
-        res.status(500).json({ error: "Topluluklar tespit edilirken bir hata oluştu!" });
+        res.status(500).json({ 
+            error: "Topluluklar tespit edilirken bir hata oluştu!",
+            details: error.message 
+        });
     }
 });
 
@@ -1009,8 +1194,8 @@ function loadGraphFromFile() {
     const lines = data.trim().split('\n');
     const graph = new Map();
     
-    // İlk 1500 satırı al (rastgele seçim yerine sabit veri)
-    const selectedLines = lines.slice(0, 1500);
+    // İlk 2000 satırı al (rastgele seçim yerine sabit veri)
+    const selectedLines = lines.slice(0, 2000);
     
     // Satırları işle
     for (const line of selectedLines) {
@@ -1028,7 +1213,7 @@ function loadGraphFromFile() {
 // Ağ verisini JSON olarak döndür
 app.get('/api/network-data', (req, res) => {
     try {
-        const graph = globalGraph; // Artık global grafı kullan
+        const graph = globalGraph || initializeGraph();
         
         // Bağlantı sayılarını hesapla
         const nodeConnections = new Map();
@@ -1061,7 +1246,7 @@ app.get('/api/network-data', (req, res) => {
             } else if (isCentral) {
                 color = "#ffa500"; // Merkez düğüm
             } else if (hasHighConnections) {
-                color = "#ffd700"; // 4 ve üzeri bağlantısı olan düğümler (sarı)
+                color = "#ffd700"; // 4 ve üzeri bağlantısı olan düğümler
             } else {
                 color = "#1f77b4"; // Normal düğümler
             }
@@ -1098,15 +1283,6 @@ app.get('/api/network-data', (req, res) => {
         console.error('Ağ verisi oluşturma hatası:', error);
         res.status(500).json({ error: 'Ağ verisi oluşturulurken bir hata oluştu' });
     }
-});
-
-// Basit topluluk tespiti (her düğüm kendi topluluğunda)
-app.get('/api/communities', (req, res) => {
-    const graph = loadGraphFromFile();
-    // Basit örnek: her düğüm kendi topluluğunda
-    const communities = {};
-    graph.forEach((_, id) => { communities[id] = id; });
-    res.json({ communities, modularity: 0 });
 });
 
 // En kısa yol (Dijkstra)
