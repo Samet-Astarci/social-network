@@ -9,6 +9,38 @@ const fs = require('fs');
 const app = express();
 const prisma = new PrismaClient();
 
+// Global graf değişkeni
+let globalGraph = null;
+
+// Graf verisini yükle ve bellekte tut
+function initializeGraph() {
+    if (globalGraph) return globalGraph;
+    
+    const data = fs.readFileSync('public/datasheetfrom_facebok.txt', 'utf-8');
+    const lines = data.trim().split('\n');
+    const graph = new Map();
+    
+    // İlk 1500 satırı al
+    const selectedLines = lines.slice(0, 1500);
+    
+    // Satırları işle
+    for (const line of selectedLines) {
+        const [u, v] = line.split(/[,\s]+/).map(Number);
+        if (!isNaN(u) && !isNaN(v)) {
+            if (!graph.has(u)) graph.set(u, new Set());
+            if (!graph.has(v)) graph.set(v, new Set());
+            graph.get(u).add(v);
+            graph.get(v).add(u);
+        }
+    }
+    
+    globalGraph = graph;
+    return graph;
+}
+
+// Sunucu başlatıldığında grafı yükle
+initializeGraph();
+
 // CORS ve middleware ayarları
 app.use(cors({
     origin: [
@@ -977,20 +1009,10 @@ function loadGraphFromFile() {
     const lines = data.trim().split('\n');
     const graph = new Map();
     
-    // İlk 15000 satırı al
-    const firstLines = lines.slice(0, 15000);
-    const selectedLines = [];
+    // İlk 1500 satırı al (rastgele seçim yerine sabit veri)
+    const selectedLines = lines.slice(0, 1500);
     
-    // Her 10 satırdan rastgele birini seç
-    for (let i = 0; i < firstLines.length; i += 10) {
-        const group = firstLines.slice(i, Math.min(i + 10, firstLines.length));
-        if (group.length > 0) {
-            const randomIndex = Math.floor(Math.random() * group.length);
-            selectedLines.push(group[randomIndex]);
-        }
-    }
-    
-    // Seçilen satırları işle
+    // Satırları işle
     for (const line of selectedLines) {
         const [u, v] = line.split(/[,\s]+/).map(Number);
         if (!isNaN(u) && !isNaN(v)) {
@@ -1006,7 +1028,7 @@ function loadGraphFromFile() {
 // Ağ verisini JSON olarak döndür
 app.get('/api/network-data', (req, res) => {
     try {
-        const graph = loadGraphFromFile();
+        const graph = globalGraph; // Artık global grafı kullan
         
         // Bağlantı sayılarını hesapla
         const nodeConnections = new Map();
@@ -1029,7 +1051,7 @@ app.get('/api/network-data', (req, res) => {
             const hasHighConnections = connectionCount >= 4;
             
             // Düğüm boyutunu bağlantı sayısına göre hesapla
-            const baseSize = Math.sqrt(connectionCount) * 2;
+            const baseSize = Math.sqrt(connectionCount) * 3;
             const size = isTop5 ? baseSize * 1.5 : baseSize;
             
             // Düğüm rengini belirle
@@ -1050,7 +1072,7 @@ app.get('/api/network-data', (req, res) => {
                 isCentral,
                 isTop5,
                 hasHighConnections,
-                size: Math.min(30, Math.max(10, size)), // Boyut sınırlaması
+                size: Math.min(45, Math.max(15, size)),
                 color
             };
         });
@@ -1090,29 +1112,42 @@ app.get('/api/communities', (req, res) => {
 // En kısa yol (Dijkstra)
 app.get('/api/shortest-path', (req, res) => {
     const { from, to } = req.query;
-    const graph = loadGraphFromFile();
+    const graph = globalGraph; // Artık global grafı kullan
     const start = Number(from), end = Number(to);
-    if (!graph.has(start) || !graph.has(end)) return res.json({ path: [], totalWeight: -1 });
+    
+    if (!graph.has(start) || !graph.has(end)) {
+        return res.json({ path: [], totalWeight: -1 });
+    }
 
     // Dijkstra
     const dist = {}, prev = {}, queue = new Set(graph.keys());
     graph.forEach((_, id) => { dist[id] = Infinity; prev[id] = null; });
     dist[start] = 0;
+    
     while (queue.size) {
         let u = Array.from(queue).reduce((a, b) => dist[a] < dist[b] ? a : b);
         queue.delete(u);
         if (u == end) break;
+        
         graph.get(u).forEach(v => {
             if (!queue.has(v)) return;
             let alt = dist[u] + 1;
-            if (alt < dist[v]) { dist[v] = alt; prev[v] = u; }
+            if (alt < dist[v]) { 
+                dist[v] = alt; 
+                prev[v] = u; 
+            }
         });
     }
+    
     // Yol oluştur
     let path = [], u = end;
     if (prev[u] !== null || u == start) {
-        while (u !== null) { path.unshift(u); u = prev[u]; }
+        while (u !== null) { 
+            path.unshift(u); 
+            u = prev[u]; 
+        }
     }
+    
     res.json({ path, totalWeight: dist[end] });
 });
 

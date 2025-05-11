@@ -176,18 +176,66 @@
             }
 
             try {
-                const response = await fetch(`http://localhost:3001/api/shortest-path?start=${startNode}&end=${endNode}`);
+                const response = await fetch(`http://localhost:3001/api/shortest-path?from=${startNode}&to=${endNode}`);
                 const data = await response.json();
                 
                 const resultDiv = document.getElementById('path-result');
                 resultDiv.style.display = 'block';
                 
-                if (data.path) {
+                if (data.path && data.path.length > 0) {
                     resultDiv.innerHTML = `
                         <h4>En Kısa Yol Sonuçları:</h4>
                         <p>Yol: ${data.path.join(' → ')}</p>
-                        <p>Mesafe: ${data.distance} adım</p>
+                        <p>Mesafe: ${data.totalWeight} adım</p>
                     `;
+
+                    // Tüm node ve bağlantıları sönük yap
+                    d3.selectAll('.node')
+                        .attr('opacity', 0.2)
+                        .attr('stroke', '#fff')
+                        .attr('stroke-width', 1);
+                    
+                    d3.selectAll('.link')
+                        .attr('stroke-opacity', 0.1)
+                        .attr('stroke', '#999')
+                        .attr('stroke-width', 1);
+
+                    // Yoldaki node'ları vurgula
+                    data.path.forEach(nodeId => {
+                        d3.selectAll('.node')
+                            .filter(d => d.id === parseInt(nodeId))
+                            .attr('opacity', 1)
+                            .attr('stroke', '#ff0000')
+                            .attr('stroke-width', 3);
+                    });
+
+                    // Yoldaki bağlantıları vurgula
+                    for (let i = 0; i < data.path.length - 1; i++) {
+                        const currentId = parseInt(data.path[i]);
+                        const nextId = parseInt(data.path[i + 1]);
+                        d3.selectAll('.link')
+                            .filter(d => 
+                                (d.source.id === currentId && d.target.id === nextId) ||
+                                (d.source.id === nextId && d.target.id === currentId)
+                            )
+                            .attr('stroke', '#ff0000')
+                            .attr('stroke-opacity', 1)
+                            .attr('stroke-width', 3);
+                    }
+
+                    // 5 saniye sonra normal görünüme dön
+                    setTimeout(() => {
+                        d3.selectAll('.node')
+                            .attr('opacity', 1)
+                            .attr('stroke', d => d.isTop5 ? '#ff0000' : '#fff')
+                            .attr('stroke-width', d => d.isTop5 ? 3 : 2);
+                        
+                        d3.selectAll('.link')
+                            .attr('stroke', d => d.isTop5Connection ? '#ff4444' : '#999')
+                            .attr('stroke-opacity', d => d.isTop5Connection ? 0.8 : 0.4)
+                            .attr('stroke-width', d => d.isTop5Connection ? 4 : 2);
+                    }, 5000);
+
                 } else {
                     resultDiv.innerHTML = `
                         <h4>Sonuç:</h4>

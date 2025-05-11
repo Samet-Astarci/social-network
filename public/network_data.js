@@ -46,30 +46,30 @@ async function loadAndVisualizeNetwork() {
                 .distance(d => {
                     // Öne çıkan düğümler arasındaki bağlantılar için daha uzun mesafe
                     if (d.source.isTop5 && d.target.isTop5) {
-                        return 250;
+                        return 300;
                     }
                     // Normal bağlantılar için standart mesafe
-                    return 180;
+                    return 250;
                 })
             )
             .force('charge', d3.forceManyBody()
                 .strength(d => {
                     // Öne çıkan düğümler için daha güçlü itme
                     if (d.isTop5) {
-                        return -400;
+                        return -800;
                     }
                     // Normal düğümler için standart itme
-                    return -250;
+                    return -500;
                 })
             )
             .force('center', d3.forceCenter(width / 2, height / 2))
             .force('collision', d3.forceCollide()
-                .radius(d => d.size + 35)
-                .strength(0.95)
+                .radius(d => d.size + 50)
+                .strength(1)
             )
-            .force('x', d3.forceX(width / 2).strength(0.05))
-            .force('y', d3.forceY(height / 2).strength(0.05))
-            .force('random', d3.forceX().strength(d => (Math.random() - 0.5) * 0.05));
+            .force('x', d3.forceX(width / 2).strength(0.03))
+            .force('y', d3.forceY(height / 2).strength(0.03))
+            .force('random', d3.forceX().strength(d => (Math.random() - 0.5) * 0.02));
 
         // Bağlantıları çiz
         const link = g.append('g')
