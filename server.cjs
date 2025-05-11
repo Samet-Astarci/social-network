@@ -3,28 +3,35 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const cors = require('cors');
 const fs = require('fs');
+const path = require('path');
 
 const app = express();
+
+const JWT_SECRET = process.env.JWT_SECRET || 'secretkey';
+const PORT = process.env.PORT || 3001;
 
 // Global graf değişkeni
 let globalGraph = null;
 
 // CORS ve middleware ayarları
 app.use(cors({
-    origin: ['http://127.0.0.1:5500', 'http://localhost:3001', 'http://localhost:3000','https://social-network-q2av.onrender.com'],
+    origin: ['http://127.0.0.1:5500', 'http://localhost:3001', 'http://localhost:3000', 'https://social-network-q2av.onrender.com'],
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
 }));
 app.use(express.json());
-app.use(express.static('public')); // Statik dosyaları (örneğin, frontend1.html) servis et
 
-const JWT_SECRET = process.env.JWT_SECRET || 'secretkey';
-const PORT = process.env.PORT || 3001;
+// React build dosyalarını sun
+app.use(express.static(path.join(__dirname, 'dist')));
 
-const path = require("path");
+// React Router için fallback (tüm bilinmeyen route’lar için)
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
 
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "frontend1.html"));
+// Server başlat
+app.listen(PORT, () => {
+    console.log(`Sunucu ${PORT} portunda çalışıyor...`);
 });
 
 // Graf verisini yükle ve bellekte tut

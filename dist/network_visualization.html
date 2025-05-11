@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sosyal Ağ Görselleştirmesi</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f9;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        #network-container {
+            width: 100%;
+            height: 600px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            overflow: hidden;
+            position: relative;
+            background-color: #fff;
+        }
+        .controls {
+            margin: 20px;
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .path-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .control-button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        .control-button:hover {
+            background-color: #45a049;
+        }
+        input[type="number"] {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            width: 120px;
+        }
+        .result-panel {
+            margin: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            display: none;
+        }
+        .community-distribution {
+            margin-top: 15px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 10px;
+        }
+        .community-bar {
+            padding: 10px;
+            border-radius: 4px;
+            color: white;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .community-bar:hover {
+            transform: scale(1.02);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .community-info {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+        .community-stat {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .tooltip {
+            position: absolute;
+            padding: 10px;
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            border-radius: 5px;
+            font-size: 12px;
+            pointer-events: none;
+            z-index: 1000;
+            max-width: 250px;
+        }
+        .community-legend {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: #fff;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        .community-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .cancel-button {
+            background-color: #dc3545;
+        }
+        .cancel-button:hover {
+            background-color: #c82333;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Sosyal Ağ Görselleştirmesi</h1>
+        
+        <div class="controls">
+            <div class="community-controls">
+                <button onclick="analyzeCommunities()" class="control-button">Toplulukları Analiz Et</button>
+                <button onclick="resetCommunityAnalysis()" class="control-button cancel-button">İptal</button>
+            </div>
+            <div class="path-controls">
+                <input type="number" id="startNode" placeholder="Başlangıç ID">
+                <input type="number" id="endNode" placeholder="Bitiş ID">
+                <button onclick="findShortestPath()" class="control-button">En Kısa Yol Bul</button>
+            </div>
+        </div>
+
+        <div id="community-result" class="result-panel">
+            <h3>Topluluk Analizi Sonuçları</h3>
+            <div id="community-stats"></div>
+            <div class="community-legend"></div>
+        </div>
+        
+        <div id="shortest-path-result" class="result-panel"></div>
+        <div id="network-container"></div>
+    </div>
+
+    <script>
+        // Topluluk renk paleti
+        const communityColors = [
+            "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd",
+            "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf",
+            "#aec7e8", "#ffbb78", "#98df8a", "#ff9896", "#c5b0d5",
+            "#c49c94", "#f7b6d2", "#c7c7c7", "#dbdb8d", "#9edae5"
+        ];
+
+        // Graf verilerini tutacak global değişkenler
+        let nodes = [];
+        let links = [];
+        let svg, simulation, nodeElements, linkElements;
+        let communities = null;
+        let selectedCommunity = null;
+
+        // Graf verilerini yükle ve görselleştirmeyi başlat
+        async function initializeNetwork() {
+            try {
+                // Ağ verilerini yükle
+                const networkResponse = await fetch('http://localhost:3001/api/network-data');
+                const networkData = await networkResponse.json();
+                
+                nodes = networkData.nodes;
+                links = networkData.links;
+                
+                // Başlangıçta sadece temel görselleştirmeyi oluştur
+                createVisualization();
+                
+            } catch (error) {
+                console.error('Veri yükleme hatası:', error);
+                // Hata mesajını görselleştir
+                const container = document.getElementById('network-container');
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 20px; color: #dc3545;">
+                        <h3>Ağ verisi yüklenirken bir hata oluştu</h3>
+                        <p>${error.message}</p>
+                        <button onclick="initializeNetwork()" class="control-button">Yeniden Dene</button>
+                    </div>
+                `;
+            }
+        }
+
+        // D3.js ile görselleştirmeyi oluştur
+        function createVisualization() {
+            // Önce mevcut SVG'yi temizle
+            d3.select('#network-container').select('svg').remove();
+            
+            const container = document.getElementById('network-container');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            // SVG oluştur
+            svg = d3.select('#network-container')
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height);
+
+            // Zoom davranışı ekle
+            const zoom = d3.zoom()
+                .scaleExtent([0.1, 4])
+                .on('zoom', (event) => {
+                    svg.selectAll('g').attr('transform', event.transform);
+                });
+
+            svg.call(zoom);
+
+            // Container grup
+            const g = svg.append('g');
+
+            // Bağlantıları düğüm referanslarıyla eşle
+            const linkData = links.map(link => ({
+                source: nodes.find(node => node.id === link.source) || link.source,
+                target: nodes.find(node => node.id === link.target) || link.target,
+                isTop5Connection: link.isTop5Connection
+            }));
+
+            // Force-directed layout oluştur
+            simulation = d3.forceSimulation(nodes)
+                .force('link', d3.forceLink(linkData).id(d => d.id).distance(50))
+                .force('charge', d3.forceManyBody().strength(-100))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collision', d3.forceCollide().radius(d => d.size + 5));
+
+            // Bağlantıları çiz
+            linkElements = g.append('g')
+                .selectAll('line')
+                .data(linkData)
+                .enter()
+                .append('line')
+                .attr('stroke', '#999')
+                .attr('stroke-opacity', 0.6)
+                .attr('stroke-width', d => d.isTop5Connection ? 3 : 1);
+
+            // Düğümleri çiz
+            nodeElements = g.append('g')
+                .selectAll('circle')
+                .data(nodes)
+                .enter()
+                .append('circle')
+                .attr('r', d => d.size || 5)
+                .attr('fill', d => d.color)
+                .call(drag(simulation));
+
+            // Düğüm etiketlerini ekle
+            const labels = g.append('g')
+                .selectAll('text')
+                .data(nodes)
+                .enter()
+                .append('text')
+                .text(d => d.id)
+                .attr('font-size', '8px')
+                .attr('dx', 8)
+                .attr('dy', 3);
+
+            // Simülasyonu güncelle
+            simulation.on('tick', () => {
+                linkElements
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+
+                nodeElements
+                    .attr('cx', d => d.x)
+                    .attr('cy', d => d.y);
+
+                labels
+                    .attr('x', d => d.x)
+                    .attr('y', d => d.y);
+            });
+
+            // Tooltip'leri ekle
+            const tooltip = d3.select('body').append('div')
+                .attr('class', 'tooltip')
+                .style('opacity', 0);
+
+            nodeElements
+                .on('mouseover', function(event, d) {
+                    tooltip.transition()
+                        .duration(200)
+                        .style('opacity', .9);
+                    tooltip.html(`
+                        <strong>Kullanıcı ID:</strong> ${d.id}<br/>
+                        <strong>Bağlantı Sayısı:</strong> ${d.connectionCount}<br/>
+                        <strong>Topluluk ID:</strong> ${d.communityId || 'Belirsiz'}<br/>
+                        <strong>Öne Çıkan Düğüm:</strong> ${d.isTop5 ? 'Evet' : 'Hayır'}<br/>
+                        <strong>Merkez Düğüm:</strong> ${d.isCentral ? 'Evet' : 'Hayır'}<br/>
+                        <strong>4+ Bağlantı:</strong> ${d.hasHighConnections ? 'Evet' : 'Hayır'}
+                    `)
+                        .style('left', (event.pageX + 10) + 'px')
+                        .style('top', (event.pageY - 28) + 'px');
+                })
+                .on('mouseout', function() {
+                    tooltip.transition()
+                        .duration(500)
+                        .style('opacity', 0);
+                });
+        }
+
+        // Sürükleme davranışı
+        function drag(simulation) {
+            function dragstarted(event) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                event.subject.fx = event.subject.x;
+                event.subject.fy = event.subject.y;
+            }
+
+            function dragged(event) {
+                event.subject.fx = event.x;
+                event.subject.fy = event.y;
+            }
+
+            function dragended(event) {
+                if (!event.active) simulation.alphaTarget(0);
+                event.subject.fx = null;
+                event.subject.fy = null;
+            }
+
+            return d3.drag()
+                .on('start', dragstarted)
+                .on('drag', dragged)
+                .on('end', dragended);
+        }
+
+        // Topluluk analizini gerçekleştir
+        async function analyzeCommunities() {
+            try {
+                // Topluluk verilerini yükle
+                const communityResponse = await fetch('http://localhost:3001/api/analysis/communities');
+                const communityData = await communityResponse.json();
+                communities = communityData.communities;
+                
+                if (communities) {
+                    // Düğümlere topluluk renklerini ata
+                    nodes.forEach(node => {
+                        const communityId = communities[node.id];
+                        if (communityId !== undefined) {
+                            const colorIndex = communityId % communityColors.length;
+                            node.color = communityColors[colorIndex];
+                            node.communityId = communityId;
+                        }
+                    });
+                    
+                    // Topluluk istatistiklerini hesapla
+                    const communityStats = {};
+                    Object.values(communities).forEach(communityId => {
+                        communityStats[communityId] = (communityStats[communityId] || 0) + 1;
+                    });
+                    
+                    // Sonuçları göster
+                    const resultDiv = document.getElementById('community-stats');
+                    resultDiv.innerHTML = `
+                        <div class="community-info">
+                            <div class="community-stat">
+                                <span>Toplam Topluluk:</span>
+                                <strong>${Object.keys(communityStats).length}</strong>
+                            </div>
+                            <div class="community-stat">
+                                <span>Modülerlik Skoru:</span>
+                                <strong>${communityData.modularity.toFixed(4)}</strong>
+                            </div>
+                            <div class="community-stat">
+                                <span>Ortalama Topluluk Boyutu:</span>
+                                <strong>${(nodes.length / Object.keys(communityStats).length).toFixed(1)} düğüm</strong>
+                            </div>
+                        </div>
+                        <h4 class="mt-4">Topluluk Dağılımı:</h4>
+                        <div class="community-distribution">
+                            ${Object.entries(communityStats)
+                                .sort((a, b) => b[1] - a[1])
+                                .map(([communityId, count]) => {
+                                    const colorIndex = parseInt(communityId) % communityColors.length;
+                                    const percentage = ((count / nodes.length) * 100).toFixed(1);
+                                    return `
+                                        <div class="community-bar" 
+                                             style="background-color: ${communityColors[colorIndex]}"
+                                             onclick="toggleCommunityHighlight(${communityId})">
+                                            <span>Topluluk ${communityId}</span>
+                                            <span>${count} düğüm (${percentage}%)</span>
+                                        </div>
+                                    `;
+                                })
+                                .join('')}
+                        </div>
+                    `;
+                    
+                    // Topluluk panelini göster
+                    document.getElementById('community-result').style.display = 'block';
+                    
+                    // Görselleştirmeyi güncelle
+                    updateVisualization();
+                }
+            } catch (error) {
+                console.error('Topluluk analizi hatası:', error);
+                alert('Topluluk analizi sırasında bir hata oluştu: ' + error.message);
+            }
+        }
+
+        // Görselleştirmeyi güncelle
+        function updateVisualization() {
+            // Düğümleri güncelle
+            nodeElements
+                .attr('fill', d => d.color)
+                .attr('r', d => {
+                    if (selectedCommunity === null) return d.size;
+                    return d.communityId === selectedCommunity ? d.size * 1.2 : d.size * 0.8;
+                })
+                .attr('opacity', d => {
+                    if (selectedCommunity === null) return 1;
+                    return d.communityId === selectedCommunity ? 1 : 0.3;
+                });
+
+            // Bağlantıları güncelle
+            linkElements
+                .attr('stroke', d => {
+                    if (!communities) return '#999';
+                    const sourceCommunity = nodes.find(n => n.id === d.source.id)?.communityId;
+                    const targetCommunity = nodes.find(n => n.id === d.target.id)?.communityId;
+                    if (sourceCommunity === targetCommunity) {
+                        return communityColors[sourceCommunity % communityColors.length];
+                    }
+                    return '#999';
+                })
+                .attr('stroke-opacity', d => {
+                    if (selectedCommunity === null) return 0.6;
+                    const sourceCommunity = nodes.find(n => n.id === d.source.id)?.communityId;
+                    const targetCommunity = nodes.find(n => n.id === d.target.id)?.communityId;
+                    return (sourceCommunity === selectedCommunity && targetCommunity === selectedCommunity) ? 0.6 : 0.1;
+                })
+                .attr('stroke-width', d => {
+                    if (selectedCommunity === null) return d.isTop5Connection ? 3 : 1;
+                    const sourceCommunity = nodes.find(n => n.id === d.source.id)?.communityId;
+                    const targetCommunity = nodes.find(n => n.id === d.target.id)?.communityId;
+                    return (sourceCommunity === selectedCommunity && targetCommunity === selectedCommunity) ? 2 : 1;
+                });
+        }
+
+        // Topluluk vurgulamasını aç/kapat
+        function toggleCommunityHighlight(communityId) {
+            if (selectedCommunity === communityId) {
+                selectedCommunity = null;
+            } else {
+                selectedCommunity = communityId;
+            }
+            updateVisualization();
+        }
+
+        // En kısa yol analizi fonksiyonu
+        async function findShortestPath() {
+            const startNode = document.getElementById('startNode').value;
+            const endNode = document.getElementById('endNode').value;
+
+            if (!startNode || !endNode) {
+                alert('Lütfen başlangıç ve bitiş düğümlerini girin.');
+                return;
+            }
+
+            try {
+                const response = await fetch(`http://localhost:3001/api/shortest-path?from=${startNode}&to=${endNode}`);
+                const data = await response.json();
+                
+                const resultDiv = document.getElementById('shortest-path-result');
+                resultDiv.style.display = 'block';
+                
+                if (data.path && data.path.length > 0) {
+                    resultDiv.innerHTML = `
+                        <h4>En Kısa Yol Sonuçları:</h4>
+                        <p>Yol: ${data.path.join(' → ')}</p>
+                        <p>Mesafe: ${data.totalWeight} adım</p>
+                        <button onclick="resetPathHighlight()" class="control-button">Vurgulamayı Kaldır</button>
+                    `;
+
+                    highlightPath(data.path);
+                } else {
+                    resultDiv.innerHTML = `
+                        <h4>Sonuç:</h4>
+                        <p>Bu iki düğüm arasında yol bulunamadı.</p>
+                    `;
+                }
+            } catch (error) {
+                console.error('En kısa yol analizi hatası:', error);
+                alert('En kısa yol analizi sırasında bir hata oluştu: ' + error.message);
+            }
+        }
+
+        // Yol vurgulama fonksiyonu
+        function highlightPath(path) {
+            // Tüm düğüm ve bağlantıları sönükleştir
+            nodeElements.attr('opacity', 0.2);
+            linkElements.attr('opacity', 0.1);
+
+            // Yoldaki düğümleri vurgula
+            nodeElements
+                .filter(d => path.includes(d.id))
+                    .attr('opacity', 1)
+                    .attr('stroke', '#ff0000')
+                .attr('stroke-width', 2);
+
+            // Yoldaki bağlantıları vurgula
+            for (let i = 0; i < path.length - 1; i++) {
+                linkElements
+                    .filter(d => 
+                        (d.source.id === path[i] && d.target.id === path[i + 1]) ||
+                        (d.source.id === path[i + 1] && d.target.id === path[i])
+                    )
+                    .attr('opacity', 1)
+                    .attr('stroke', '#ff0000')
+                    .attr('stroke-width', 2);
+            }
+        }
+
+        // Vurgulamayı sıfırlama fonksiyonu
+        function resetPathHighlight() {
+            nodeElements
+                .attr('opacity', 1)
+                .attr('stroke', null)
+                .attr('stroke-width', null);
+
+            linkElements
+                .attr('opacity', 0.6)
+                .attr('stroke', '#999')
+                .attr('stroke-width', d => d.isTop5Connection ? 3 : 1);
+        }
+
+        // Topluluk analizini sıfırla
+        function resetCommunityAnalysis() {
+            // Topluluk panelini gizle
+            document.getElementById('community-result').style.display = 'none';
+            
+            // Seçili topluluğu sıfırla
+            selectedCommunity = null;
+            communities = null;
+            
+            // Düğümleri orijinal renklerine ve boyutlarına döndür
+            nodes.forEach(node => {
+                const connectionCount = node.connectionCount;
+                const baseSize = Math.sqrt(connectionCount) * 3;
+                
+                if (node.isTop5) {
+                    node.color = "#ff0000";
+                    node.size = Math.min(45, Math.max(15, baseSize * 1.5));
+                } else if (node.isCentral) {
+                    node.color = "#ffa500";
+                    node.size = Math.min(45, Math.max(15, baseSize));
+                } else if (node.hasHighConnections) {
+                    node.color = "#ffd700";
+                    node.size = Math.min(45, Math.max(15, baseSize));
+                } else {
+                    node.color = "#1f77b4";
+                    node.size = Math.min(45, Math.max(15, baseSize));
+                }
+                delete node.communityId;
+            });
+
+            // Görselleştirmeyi yeniden oluştur
+            createVisualization();
+            
+            // Simülasyonu yeniden başlat
+            simulation.alpha(0.3).restart();
+        }
+
+        // Sayfa yüklendiğinde ağı başlat
+        document.addEventListener('DOMContentLoaded', initializeNetwork);
+    </script>
+</body>
+</html> 
