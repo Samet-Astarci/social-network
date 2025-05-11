@@ -4,19 +4,14 @@ import bcrypt from 'bcryptjs';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
-import fallback from 'express-history-api-fallback';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { PrismaClient } from '@prisma/client';
+import process from 'process';
 
+const prisma = new PrismaClient();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-
-//const express = require('express');
-//const jwt = require('jsonwebtoken');
-//const bcrypt = require('bcryptjs');
-//const cors = require('cors');
-//const fs = require('fs');
-//const path = require('path');
 
 const app = express();
 
@@ -28,49 +23,37 @@ let globalGraph = null;
 
 // CORS ve middleware ayarları
 app.use(cors({
-    origin: ['http://127.0.0.1:5500', 'http://localhost:3001', 'http://localhost:3000', 'https://social-network-q2av.onrender.com'],
+    origin: ['http://127.0.0.1:5500', 'http://localhost:3001', 'http://localhost:3000'],
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
 }));
 app.use(express.json());
 
-// React build dosyalarını sun
-app.use(express.static(path.join(__dirname, 'dist')));
-
-//const fallback = require('express-history-api-fallback');
-app.use(fallback('index.html', { root: path.join(__dirname, 'dist') }));
-
-
-
 // Graf verisini yükle ve bellekte tut
 function initializeGraph() {
-    if (globalGraph) return globalGraph;
-    
-    try {
-        const data = fs.readFileSync('public/datasheetfrom_facebok.txt', 'utf-8');
-        const lines = data.trim().split('\n');
-        const graph = new Map();
+    const data = fs.readFileSync('public/datasheetfrom_facebok.txt', 'utf-8');
+    const lines = data.trim().split('\n');
+    const graph = new Map();
+
+    // İlk 2000 satırı al
+    const limitedLines = lines.slice(0, 2000);
+
+    // Graf yapısını oluştur
+    limitedLines.forEach(line => {
+        const [source, target] = line.split(' ').map(Number);
         
-        // İlk 2000 satırı al
-        const selectedLines = lines.slice(0, 2000);
-        
-        // Satırları işle
-        for (const line of selectedLines) {
-            const [u, v] = line.split(/[,\s]+/).map(Number);
-            if (!isNaN(u) && !isNaN(v)) {
-                if (!graph.has(u)) graph.set(u, new Set());
-                if (!graph.has(v)) graph.set(v, new Set());
-                graph.get(u).add(v);
-                graph.get(v).add(u);
-            }
+        if (!graph.has(source)) {
+            graph.set(source, new Set());
+        }
+        if (!graph.has(target)) {
+            graph.set(target, new Set());
         }
         
-        globalGraph = graph;
-        return graph;
-    } catch (error) {
-        console.error("Graf yükleme hatası:", error);
-        throw new Error("Graf verisi yüklenemedi!");
-    }
+        graph.get(source).add(target);
+        graph.get(target).add(source);
+    });
+
+    return graph;
 }
 
 // Sunucu başlatıldığında grafı yükle
@@ -826,7 +809,7 @@ app.get("/users/:userId/statistics", async (req, res) => {
 // Graf analizi endpoint'leri
 
 // En kısa yol analizi endpoint'i
-app.get("/api/shortest-path", async (req, res) => {
+app.get("/api/shortest-path", (req, res) => {
     try {
         const { from, to } = req.query;
         const graph = globalGraph || initializeGraph();
@@ -1203,143 +1186,65 @@ app.get("/users/:userId/common-connections/:otherUserId", async (req, res) => {
 
 // --- DOSYADAN OKUYAN YENİ API ENDPOINTLERİ ---
 
-// Ağ verisini dosyadan oku ve bellekte graf oluştur
-function loadGraphFromFile() {
-    const data = fs.readFileSync('public/datasheetfrom_facebok.txt', 'utf-8');
-    const lines = data.trim().split('\n');
-    const graph = new Map();
-    
-    // İlk 2000 satırı al (rastgele seçim yerine sabit veri)
-    const selectedLines = lines.slice(0, 2000);
-    
-    // Satırları işle
-    for (const line of selectedLines) {
-        const [u, v] = line.split(/[,\s]+/).map(Number);
-        if (!isNaN(u) && !isNaN(v)) {
-            if (!graph.has(u)) graph.set(u, new Set());
-            if (!graph.has(v)) graph.set(v, new Set());
-            graph.get(u).add(v);
-            graph.get(v).add(u);
-        }
-    }
-    return graph;
-}
-
 // Ağ verisini JSON olarak döndür
 app.get("/api/network-data", (req, res) => {
     try {
         const graph = globalGraph || initializeGraph();
-        
-        // Bağlantı sayılarını hesapla
-        const nodeConnections = new Map();
-        graph.forEach((neighbors, id) => {
-            nodeConnections.set(id, neighbors.size);
-        });
-        
-        // Bağlantı sayılarına göre düğümleri sırala
-        const sortedNodes = Array.from(nodeConnections.entries())
-            .sort((a, b) => b[1] - a[1]);
-        
-        // En yüksek bağlantıya sahip 5 düğümün ID'lerini al
-        const top5NodeIds = new Set(sortedNodes.slice(0, 5).map(([id]) => id));
-        
-        // Düğümleri oluştur
-        const nodes = Array.from(graph.keys()).map(id => {
-            const connectionCount = nodeConnections.get(id);
-            const isTop5 = top5NodeIds.has(id);
-            const isCentral = id === 0;
-            const hasHighConnections = connectionCount >= 4;
-            
-            // Düğüm boyutunu bağlantı sayısına göre hesapla
-            const baseSize = Math.sqrt(connectionCount) * 3;
-            const size = isTop5 ? baseSize * 1.5 : baseSize;
-            
-            // Düğüm rengini belirle
-            let color;
-            if (isTop5) {
-                color = "#ff0000"; // En yüksek bağlantılı 5 düğüm
-            } else if (isCentral) {
-                color = "#ffa500"; // Merkez düğüm
-            } else if (hasHighConnections) {
-                color = "#ffd700"; // 4 ve üzeri bağlantısı olan düğümler
-            } else {
-                color = "#1f77b4"; // Normal düğümler
-            }
-            
-            return {
-                id,
-                connectionCount,
-                isCentral,
-                isTop5,
-                hasHighConnections,
-                size: Math.min(45, Math.max(15, size)),
-                color
-            };
-        });
-        
-        // Bağlantıları oluştur
+        const nodes = [];
         const links = [];
-        graph.forEach((neighbors, source) => {
-            neighbors.forEach(target => {
-                // Her bağlantıyı sadece bir kez ekle
-                if (source < target) {
-                    const isTop5Connection = top5NodeIds.has(source) && top5NodeIds.has(target);
-                    links.push({
-                        source,
-                        target,
-                        isTop5Connection
+        const nodeSet = new Set();
+
+        // Düğümleri ve bağlantıları hazırla
+        for (const [source, targets] of graph.entries()) {
+            if (!nodeSet.has(source)) {
+                nodeSet.add(source);
+                nodes.push({
+                    id: source,
+                    size: 10 + Math.min(targets.size * 2, 20),
+                    color: targets.size > 10 ? '#ff4444' : '#1f77b4',
+                    isTop5: targets.size > 15,
+                    isCentral: targets.size > 12,
+                    hasHighConnections: targets.size > 8,
+                    connectionCount: targets.size
+                });
+            }
+
+            for (const target of targets) {
+                if (!nodeSet.has(target)) {
+                    const targetConnections = graph.get(target);
+                    nodeSet.add(target);
+                    nodes.push({
+                        id: target,
+                        size: 10 + Math.min(targetConnections.size * 2, 20),
+                        color: targetConnections.size > 10 ? '#ff4444' : '#1f77b4',
+                        isTop5: targetConnections.size > 15,
+                        isCentral: targetConnections.size > 12,
+                        hasHighConnections: targetConnections.size > 8,
+                        connectionCount: targetConnections.size
                     });
                 }
-            });
-        });
+
+                links.push({
+                    source: source,
+                    target: target,
+                    isTop5Connection: graph.get(source).size > 15 && graph.get(target).size > 15
+                });
+            }
+        }
 
         res.json({ nodes, links });
     } catch (error) {
         console.error('Ağ verisi oluşturma hatası:', error);
-        res.status(500).json({ error: 'Ağ verisi oluşturulurken bir hata oluştu' });
+        res.status(500).json({ error: 'Ağ verisi oluşturulamadı' });
     }
 });
 
-// En kısa yol (Dijkstra)
-app.get("/api/shortest-path", (req, res) => {
-    const { from, to } = req.query;
-    const graph = globalGraph; // Artık global grafı kullan
-    const start = Number(from), end = Number(to);
-    
-    if (!graph.has(start) || !graph.has(end)) {
-        return res.json({ path: [], totalWeight: -1 });
-    }
+// Statik dosya servisi - API endpoint'lerinden SONRA gelmeli
+app.use(express.static('public'));
 
-    // Dijkstra
-    const dist = {}, prev = {}, queue = new Set(graph.keys());
-    graph.forEach((_, id) => { dist[id] = Infinity; prev[id] = null; });
-    dist[start] = 0;
-    
-    while (queue.size) {
-        let u = Array.from(queue).reduce((a, b) => dist[a] < dist[b] ? a : b);
-        queue.delete(u);
-        if (u == end) break;
-        
-        graph.get(u).forEach(v => {
-            if (!queue.has(v)) return;
-            let alt = dist[u] + 1;
-            if (alt < dist[v]) { 
-                dist[v] = alt; 
-                prev[v] = u; 
-            }
-        });
-    }
-    
-    // Yol oluştur
-    let path = [], u = end;
-    if (prev[u] !== null || u == start) {
-        while (u !== null) { 
-            path.unshift(u); 
-            u = prev[u]; 
-        }
-    }
-    
-    res.json({ path, totalWeight: dist[end] });
+// Ana sayfa için index.html'i sun - en sonda olmalı
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Sunucuyu başlat
@@ -1352,3 +1257,172 @@ process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled Rejection at:', promise, 'reason:', reason);
     process.exit(1);
 });
+
+// Betweenness Centrality hesaplama fonksiyonu
+async function calculateBetweennessCentrality() {
+    const graph = globalGraph || initializeGraph();
+    const betweenness = new Map();
+    const nodes = Array.from(graph.keys());
+
+    // Her düğüm için başlangıç değeri
+    nodes.forEach(node => betweenness.set(node, 0));
+
+    // Her düğüm çifti için en kısa yolları hesapla
+    for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+            const start = nodes[i];
+            const end = nodes[j];
+            
+            // Dijkstra algoritması ile en kısa yolu bul
+            const { path } = findShortestPath(graph, start, end);
+            
+            // Yol üzerindeki ara düğümlerin betweenness değerlerini artır
+            if (path.length > 2) {
+                path.slice(1, -1).forEach(node => {
+                    betweenness.set(node, betweenness.get(node) + 1);
+                });
+            }
+        }
+    }
+
+    // Sonuçları normalize et ve sırala
+    const maxValue = Math.max(...betweenness.values());
+    const results = Array.from(betweenness.entries())
+        .map(([node, value]) => ({
+            node,
+            betweenness: value / maxValue
+        }))
+        .sort((a, b) => b.betweenness - a.betweenness);
+
+    return results;
+}
+
+// Ağ yoğunluğu analizi fonksiyonu
+async function analyzeNetworkDensity() {
+    const graph = globalGraph || initializeGraph();
+    const nodes = Array.from(graph.keys());
+    const n = nodes.length;
+    
+    // Toplam bağlantı sayısı
+    let totalConnections = 0;
+    nodes.forEach(node => {
+        totalConnections += graph.get(node).size;
+    });
+    totalConnections /= 2; // Her bağlantı iki kez sayıldığı için
+
+    // Maksimum olası bağlantı sayısı
+    const maxPossibleConnections = (n * (n - 1)) / 2;
+
+    // Genel yoğunluk
+    const overallDensity = totalConnections / maxPossibleConnections;
+
+    // Topluluk bazlı yoğunluk
+    const communities = detectCommunities(graph).communities;
+    const communityDensities = new Map();
+    const communityNodes = new Map();
+
+    // Toplulukları grupla
+    Object.entries(communities).forEach(([node, community]) => {
+        if (!communityNodes.has(community)) {
+            communityNodes.set(community, []);
+        }
+        communityNodes.get(community).push(parseInt(node));
+    });
+
+    // Her topluluk için yoğunluk hesapla
+    communityNodes.forEach((nodes, community) => {
+        let communityConnections = 0;
+        nodes.forEach(node => {
+            const neighbors = graph.get(node);
+            neighbors.forEach(neighbor => {
+                if (nodes.includes(neighbor)) {
+                    communityConnections++;
+                }
+            });
+        });
+        communityConnections /= 2;
+        const maxCommunityConnections = (nodes.length * (nodes.length - 1)) / 2;
+        communityDensities.set(community, communityConnections / maxCommunityConnections);
+    });
+
+    return {
+        overallDensity,
+        totalConnections,
+        nodeCount: n,
+        maxPossibleConnections,
+        communityDensities: Object.fromEntries(communityDensities),
+        timeBasedDensity: {} // Zaman bazlı analiz için placeholder
+    };
+}
+
+// Kullanıcı aktivite analizi fonksiyonu
+async function analyzeUserActivity() {
+    const graph = globalGraph || initializeGraph();
+    const nodes = Array.from(graph.keys());
+    
+    // Her kullanıcı için bağlantı sayısını hesapla
+    const userActivity = nodes.map(node => ({
+        userId: node,
+        connectionCount: graph.get(node).size
+    }));
+
+    // Aktivite seviyelerine göre sırala
+    userActivity.sort((a, b) => b.connectionCount - a.connectionCount);
+
+    // Aktivite kategorileri
+    const highThreshold = Math.floor(userActivity.length * 0.1); // Üst %10
+    const moderateThreshold = Math.floor(userActivity.length * 0.3); // Üst %30
+
+    return {
+        timestamp: new Date(),
+        categories: {
+            highlyActive: userActivity.slice(0, highThreshold),
+            moderatelyActive: userActivity.slice(highThreshold, moderateThreshold),
+            lessActive: userActivity.slice(moderateThreshold)
+        },
+        topUsers: userActivity.slice(0, 10)
+    };
+}
+
+// En kısa yol bulma yardımcı fonksiyonu
+function findShortestPath(graph, start, end) {
+    const dist = new Map();
+    const prev = new Map();
+    const queue = new Set(graph.keys());
+
+    // Başlangıç değerlerini ayarla
+    for (const node of graph.keys()) {
+        dist.set(node, Infinity);
+        prev.set(node, null);
+    }
+    dist.set(start, 0);
+
+    while (queue.size > 0) {
+        let u = Array.from(queue).reduce((a, b) => dist.get(a) < dist.get(b) ? a : b);
+        queue.delete(u);
+
+        if (u === end) break;
+
+        for (const v of graph.get(u)) {
+            if (!queue.has(v)) continue;
+            
+            const alt = dist.get(u) + 1;
+            if (alt < dist.get(v)) {
+                dist.set(v, alt);
+                prev.set(v, u);
+            }
+        }
+    }
+
+    const path = [];
+    let current = end;
+    while (current !== null) {
+        path.unshift(current);
+        current = prev.get(current);
+    }
+
+    return {
+        path,
+        distance: dist.get(end)
+    };
+}
