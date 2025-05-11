@@ -29,11 +29,6 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
-// Server başlat
-app.listen(PORT, () => {
-    console.log(`Sunucu ${PORT} portunda çalışıyor...`);
-});
-
 // Graf verisini yükle ve bellekte tut
 function initializeGraph() {
     if (globalGraph) return globalGraph;
@@ -1218,7 +1213,7 @@ function loadGraphFromFile() {
 }
 
 // Ağ verisini JSON olarak döndür
-app.get('/api/network-data', (req, res) => {
+app.get("/api/network-data", (req, res) => {
     try {
         const graph = globalGraph || initializeGraph();
         
@@ -1293,7 +1288,7 @@ app.get('/api/network-data', (req, res) => {
 });
 
 // En kısa yol (Dijkstra)
-app.get('/api/shortest-path', (req, res) => {
+app.get("/api/shortest-path", (req, res) => {
     const { from, to } = req.query;
     const graph = globalGraph; // Artık global grafı kullan
     const start = Number(from), end = Number(to);
