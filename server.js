@@ -1,9 +1,22 @@
-const express = require('express');
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-const cors = require('cors');
-const fs = require('fs');
-const path = require('path');
+import express from 'express';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+import cors from 'cors';
+import fs from 'fs';
+import path from 'path';
+import fallback from 'express-history-api-fallback';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+//const express = require('express');
+//const jwt = require('jsonwebtoken');
+//const bcrypt = require('bcryptjs');
+//const cors = require('cors');
+//const fs = require('fs');
+//const path = require('path');
 
 const app = express();
 
@@ -24,7 +37,7 @@ app.use(express.json());
 // React build dosyalarını sun
 app.use(express.static(path.join(__dirname, 'dist')));
 
-const fallback = require('express-history-api-fallback');
+//const fallback = require('express-history-api-fallback');
 app.use(fallback('index.html', { root: path.join(__dirname, 'dist') }));
 
 
