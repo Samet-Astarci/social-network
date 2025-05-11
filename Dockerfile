@@ -18,4 +18,4 @@ RUN npx prisma generate
 EXPOSE 3000
 
 # migrate deploy ve sunucuyu birlikte başlat
-CMD ["sh", "-c", "npx prisma migrate deploy && node server.cjs"]
+CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
