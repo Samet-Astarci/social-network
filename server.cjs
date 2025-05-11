@@ -24,10 +24,9 @@ app.use(express.json());
 // React build dosyalarını sun
 app.use(express.static(path.join(__dirname, 'dist')));
 
-// React Router için fallback (tüm bilinmeyen route’lar için)
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-});
+const fallback = require('express-history-api-fallback');
+app.use(fallback('index.html', { root: path.join(__dirname, 'dist') }));
+
 
 
 // Graf verisini yükle ve bellekte tut
