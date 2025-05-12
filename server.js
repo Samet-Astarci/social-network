@@ -242,10 +242,10 @@ app.post("/register", async (req, res) => {
 // Login endpoint
 app.post("/login", async (req, res) => {
     try {
-        const { username, email, password } = req.body;
+        const {email, password } = req.body;
 
         // Gerekli alanların kontrolü
-        if (!email || !password || !username) {
+        if (!email || !password) {
             return res.status(400).json({ error: "E-posta ve şifre gereklidir!" });
         }
 
@@ -1435,13 +1435,8 @@ function findShortestPath(graph, start, end) {
     };
 }
 
-// ✅ 1. Statik dosya servisleri
+//1. Statik dosya servisleri
 app.use(express.static(path.join(__dirname, 'dist')));
-
-// ✅ 2. SPA fallback
-/*app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
-});*/
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
