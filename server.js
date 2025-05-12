@@ -1442,8 +1442,7 @@ function findShortestPath(graph, start, end) {
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });*/
-//app.use(express.static(path.join(__dirname, 'public')));
-const path = require("path");
+app.use(express.static(path.join(__dirname, 'public')));
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "frontend1.html"));
