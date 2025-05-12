@@ -23,7 +23,7 @@ let globalGraph = null;
 
 // CORS ve middleware ayarları
 app.use(cors({
-    origin: ['http://127.0.0.1:5500', 'http://localhost:3001', 'http://localhost:3000','https://social-network-q2av.onrender.com'],
+    origin: ['http://127.0.0.1:5500', 'http://localhost:3001', 'http://localhost:3000','http://localhost:5173','https://social-network-q2av.onrender.com'],
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true
 }));

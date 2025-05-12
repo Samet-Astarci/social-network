@@ -1,4 +1,5 @@
 /* global d3 */
+import { API_BASE } from './config.js';
 
 // Ağ verilerini yükle ve görselleştir
 async function loadAndVisualizeNetwork() {
