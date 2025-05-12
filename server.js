@@ -30,6 +30,11 @@ app.use(cors({
 
 app.use(express.json());
 
+const path = require("path");
+
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "frontend1.html"));
+});
 /*app.use(express.static(path.join(__dirname, "dist")));
 
 app.get("*", (req, res) => {
@@ -1442,10 +1447,10 @@ function findShortestPath(graph, start, end) {
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });*/
-app.use(express.static(path.join(__dirname, 'public')));
+/*app.use(express.static(path.join(__dirname, 'public')));
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "frontend1.html"));
-});
+});*/
 
 
