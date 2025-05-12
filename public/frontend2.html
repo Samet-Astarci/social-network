@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kullanıcı Girişi ve Arkadaş Yönetimi</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f9; }
+        .form-container { max-width: 500px; margin: 0 auto; padding: 20px; background-color: white; border-radius: 10px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); margin-bottom: 30px; }
+        h2 { text-align: center; }
+        .form-input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 5px; }
+        .form-btn { width: 100%; padding: 10px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        .form-btn:hover { background-color: #0056b3; }
+        .error { color: red; text-align: center; }
+        .result { background: #eee; padding: 10px; border-radius: 5px; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+
+<div id="loginForm" class="form-container">
+    <h2>Giriş Yap</h2>
+    <input type="email" id="loginEmail" class="form-input" placeholder="E-posta" required>
+    <input type="password" id="loginPassword" class="form-input" placeholder="Şifre" required>
+    <button class="form-btn" onclick="login()">Giriş Yap</button>
+    <p class="error" id="loginError"></p>
+    <p>Hesabınız yok mu? <a href="#" onclick="showRegister()">Kayıt Olun</a></p>
+</div>
+
+<div id="registerForm" class="form-container" style="display:none;">
+    <h2>Yeni Hesap Oluştur</h2>
+    <input type="text" id="registerUsername" class="form-input" placeholder="Kullanıcı Adı" required>
+    <input type="email" id="registerEmail" class="form-input" placeholder="E-posta" required>
+    <input type="password" id="registerPassword" class="form-input" placeholder="Şifre" required>
+    <button class="form-btn" onclick="register()">Kayıt Ol</button>
+    <p class="error" id="registerError"></p>
+    <p>Zaten bir hesabınız var mı? <a href="#" onclick="showLogin()">Giriş Yapın</a></p>
+</div>
+
+<div id="profile" class="form-container" style="display:none;">
+    <h2>Profil Bilgileri</h2>
+    <p><strong>Kullanıcı Adı:</strong> <span id="profileUsername"></span></p>
+    <p><strong>E-posta:</strong> <span id="profileEmail"></span></p>
+    <button class="form-btn" onclick="logout()">Çıkış Yap</button>
+
+    <hr>
+
+    <h2>Arkadaş Ara</h2>
+    <input type="text" id="searchQuery" class="form-input" placeholder="İsim ya da e-posta">
+    <button class="form-btn" onclick="searchUsers()">Ara</button>
+    <div id="searchResults" class="result"></div>
+
+    <h2>Arkadaş Ekle</h2>
+    <input type="number" id="friendId" class="form-input" placeholder="Eklemek istediğiniz kullanıcı ID">
+    <button class="form-btn" onclick="addFriend()">Ekle</button>
+    <div id="addFriendResult" class="result"></div>
+</div>
+
+<script>
+    const apiUrl = "https://social-network-q2av.onrender.com";
+    let token = "";
+    let currentUserId = null;
+
+    function login() {
+        const email = document.getElementById("loginEmail").value;
+        const password = document.getElementById("loginPassword").value;
+
+        fetch(`${apiUrl}/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.token) {
+                token = data.token;
+                localStorage.setItem("token", token);
+                showProfile();
+            } else {
+                document.getElementById("loginError").innerText = data.error;
+            }
+        });
+    }
+
+    function register() {
+        const username = document.getElementById("registerUsername").value;
+        const email = document.getElementById("registerEmail").value;
+        const password = document.getElementById("registerPassword").value;
+
+        fetch(`${apiUrl}/register`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username, email, password })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.token) {
+                token = data.token;
+                localStorage.setItem("token", token);
+                showProfile();
+            } else {
+                document.getElementById("registerError").innerText = data.error;
+            }
+        });
+    }
+
+    function showProfile() {
+        token = localStorage.getItem("token") || token;
+
+        fetch(`${apiUrl}/profile`, {
+            headers: { Authorization: `Bearer ${token}` }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.user) {
+                currentUserId = data.user.id;
+                document.getElementById("profileUsername").innerText = data.user.username;
+                document.getElementById("profileEmail").innerText = data.user.email;
+                document.getElementById("loginForm").style.display = "none";
+                document.getElementById("registerForm").style.display = "none";
+                document.getElementById("profile").style.display = "block";
+            } else {
+                logout();
+            }
+        });
+    }
+
+    function searchUsers() {
+        const query = document.getElementById("searchQuery").value;
+
+        fetch(`${apiUrl}/users/search?query=${encodeURIComponent(query)}`, {
+            headers: { Authorization: `Bearer ${token}` }
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (Array.isArray(data)) {
+                const results = data.map(u => `ID: ${u.id} | ${u.username} (${u.email})`).join("<br>");
+                document.getElementById("searchResults").innerHTML  = results || "Sonuç bulunamadı.";
+            }
+        });
+    }
+
+    function addFriend() {
+        const friendId = parseInt(document.getElementById("friendId").value);
+        fetch(`${apiUrl}/connections`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ userId: currentUserId, friendId })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.connection) {
+                document.getElementById("addFriendResult").innerText = "Arkadaşlık isteği gönderildi.";
+            } else {
+                document.getElementById("addFriendResult").innerText = data.error || "Hata oluştu.";
+            }
+        });
+    }
+
+    function showLogin() {
+        document.getElementById("loginForm").style.display = "block";
+        document.getElementById("registerForm").style.display = "none";
+        document.getElementById("profile").style.display = "none";
+    }
+
+    function showRegister() {
+        document.getElementById("loginForm").style.display = "none";
+        document.getElementById("registerForm").style.display = "block";
+        document.getElementById("profile").style.display = "none";
+    }
+
+    function logout() {
+        token = "";
+        currentUserId = null;
+        localStorage.removeItem("token");
+        showLogin();
+    }
+
+    window.onload = showProfile;
+</script>
+
+</body>
+</html>

@@ -282,7 +282,8 @@ app.get("/profile", async (req, res) => {
         if (!user) return res.status(404).json({ error: "Kullanıcı bulunamadı!" });
 
         // Profil bilgilerini gönder
-        res.json({ user: { username: user.username, email: user.email } });
+        //res.json({ user: { username: user.username, email: user.email } });
+        res.json({ user: { id: user.id, username: user.username, email: user.email } });
     } catch (error) {
         console.error("Profile error:", error);
         if (error.name === 'JsonWebTokenError') {
@@ -1436,8 +1437,13 @@ function findShortestPath(graph, start, end) {
 }
 
 //1. Statik dosya servisleri
-app.use(express.static(path.join(__dirname, 'dist')));
+/*app.use(express.static(path.join(__dirname, 'dist')));
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});*/
+app.use(express.static(path.join(__dirname, 'public')));
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'frontend2.html'));
 });
+
