@@ -30,11 +30,11 @@ app.use(cors({
 
 app.use(express.json());
 
-app.use(express.static(path.join(__dirname, "dist")));
+/*app.use(express.static(path.join(__dirname, "dist")));
 
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "dist", "index.html"));
-});
+});*/
 
 
 // Graf verisini yükle ve bellekte tut
@@ -1248,12 +1248,12 @@ app.get("/api/network-data", (req, res) => {
 });
 
 // Statik dosya servisi - API endpoint'lerinden SONRA gelmeli
-app.use(express.static('public'));
+//app.use(express.static('public'));
 
 // Ana sayfa için index.html'i sun - en sonda olmalı
-app.get('*', (req, res) => {
+/*app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+});*/
 
 // Sunucuyu başlat
 app.listen(PORT, () => {
@@ -1434,3 +1434,11 @@ function findShortestPath(graph, start, end) {
         distance: dist.get(end)
     };
 }
+
+// ✅ 1. Statik dosya servisleri
+app.use(express.static(path.join(__dirname, 'dist')));
+
+// ✅ 2. SPA fallback
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
