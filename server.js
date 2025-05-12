@@ -31,7 +31,7 @@ app.use(cors({
 app.use(express.json());
 
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "frontend1.html"));
+  res.sendFile(path.join(__dirname, "public", "frontend2.html"));
 });
 /*app.use(express.static(path.join(__dirname, "dist")));
 
