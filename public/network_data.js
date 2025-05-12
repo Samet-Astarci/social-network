@@ -1,9 +1,10 @@
 /* global d3 */
+import { API_BASE } from './config.js';
 
 // Ağ verilerini yükle ve görselleştir
 async function loadAndVisualizeNetwork() {
     try {
-        const response = await fetch('/api/network-data');
+        const response = await fetch(`${API_BASE}/api/network-data`);
         if (!response.ok) {
             throw new Error('Ağ verisi alınamadı');
         }
