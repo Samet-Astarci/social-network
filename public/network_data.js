@@ -1,6 +1,7 @@
 /* global d3 */
 import { API_BASE } from './config.js';
 
+
 // Ağ verilerini yükle ve görselleştir
 async function loadAndVisualizeNetwork() {
     try {
@@ -189,6 +190,13 @@ async function loadAndVisualizeNetwork() {
         `;
     }
 }
+// Sayfa yüklendiğinde butona tıklama dinleyicisi ekle
+document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('showGraphBtn');
+    if (btn) {
+        btn.addEventListener('click', loadAndVisualizeNetwork);
+    }
+});
 
 // Sayfa yüklendiğinde görselleştirmeyi başlat
-document.addEventListener('DOMContentLoaded', loadAndVisualizeNetwork); 
+//document.addEventListener('DOMContentLoaded', loadAndVisualizeNetwork); 
