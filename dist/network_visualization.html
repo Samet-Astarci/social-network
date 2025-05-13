@@ -7,81 +7,120 @@
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             margin: 0;
             padding: 20px;
-            background-color: #f4f4f9;
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
         }
         .container {
             max-width: 1200px;
             margin: 0 auto;
-            background-color: white;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
         }
         h1 {
             text-align: center;
-            color: #333;
+            color: #2c3e50;
+            margin-bottom: 30px;
+            font-size: 2.2em;
+            font-weight: 600;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
         }
         #network-container {
             width: 100%;
             height: 600px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
+            border: none;
+            border-radius: 12px;
             overflow: hidden;
             position: relative;
-            background-color: #fff;
+            background-color: #ffffff;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.05);
+            margin-top: 20px;
         }
         .controls {
-            margin: 20px;
+            margin: 20px 0;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 12px;
             display: flex;
-            gap: 20px;
+            gap: 25px;
             justify-content: center;
             align-items: center;
             flex-wrap: wrap;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
         }
-        .path-controls {
+        .path-controls, .community-controls, .graph-controls {
             display: flex;
-            gap: 10px;
+            gap: 12px;
             align-items: center;
+            padding: 10px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
         .control-button {
             padding: 10px 20px;
-            background-color: #4CAF50;
+            background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
             color: white;
             border: none;
-            border-radius: 5px;
+            border-radius: 8px;
             cursor: pointer;
             font-size: 14px;
-            transition: background-color 0.3s;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
         .control-button:hover {
-            background-color: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        }
+        .cancel-button {
+            background: linear-gradient(135deg, #ff4b4b 0%, #dc3545 100%);
+        }
+        .cancel-button:hover {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
         }
         input[type="number"] {
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
+            padding: 10px 15px;
+            border: 1px solid rgba(0,0,0,0.1);
+            border-radius: 8px;
             width: 120px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.05);
+        }
+        input[type="number"]:focus {
+            outline: none;
+            border-color: #4CAF50;
+            box-shadow: 0 0 0 3px rgba(76,175,80,0.1);
         }
         .result-panel {
-            margin: 20px;
-            padding: 15px;
-            background-color: #f8f9fa;
-            border-radius: 5px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin: 20px 0;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
             display: none;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
         .community-distribution {
-            margin-top: 15px;
+            margin-top: 20px;
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 10px;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+            padding: 10px;
         }
         .community-bar {
-            padding: 10px;
-            border-radius: 4px;
+            padding: 15px;
+            border-radius: 8px;
             color: white;
             font-size: 14px;
             display: flex;
@@ -89,53 +128,86 @@
             align-items: center;
             transition: all 0.3s ease;
             cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
         .community-bar:hover {
-            transform: scale(1.02);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
         .community-info {
             margin-top: 15px;
-            padding: 10px;
+            padding: 15px;
             background-color: #f8f9fa;
-            border-radius: 5px;
+            border-radius: 8px;
             font-size: 14px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
         }
         .community-stat {
             display: flex;
             justify-content: space-between;
-            margin: 5px 0;
-            padding: 5px 0;
-            border-bottom: 1px solid #eee;
+            margin: 8px 0;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+        }
+        .community-stat:last-child {
+            border-bottom: none;
         }
         .tooltip {
             position: absolute;
-            padding: 10px;
-            background-color: rgba(0, 0, 0, 0.8);
-            color: white;
-            border-radius: 5px;
-            font-size: 12px;
+            padding: 12px 15px;
+            background: rgba(0, 0, 0, 0.85);
+            color: #ffffff;
+            border-radius: 8px;
+            font-size: 13px;
             pointer-events: none;
             z-index: 1000;
-            max-width: 250px;
+            max-width: 280px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            backdrop-filter: blur(5px);
+            line-height: 1.5;
+        }
+        .tooltip strong {
+            color: #ffffff;
+            font-weight: 600;
+            margin-right: 5px;
         }
         .community-legend {
-            margin-top: 15px;
-            padding: 10px;
+            margin-top: 20px;
+            padding: 15px;
             background-color: #fff;
-            border-radius: 4px;
-            border: 1px solid #ddd;
+            border-radius: 8px;
+            border: 1px solid rgba(0,0,0,0.1);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
         }
-        .community-controls {
+        h3 {
+            color: #2c3e50;
+            font-weight: 600;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+        strong {
+            color: #2c3e50;
+            font-weight: 600;
+        }
+        .path-history {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            display: none;
+        }
+        .path-history-item {
+            padding: 10px;
+            margin: 5px 0;
+            background-color: #f8f9fa;
+            border-radius: 4px;
             display: flex;
-            gap: 10px;
+            justify-content: space-between;
             align-items: center;
         }
-        .cancel-button {
-            background-color: #dc3545;
-        }
-        .cancel-button:hover {
-            background-color: #c82333;
+        .path-history-item:hover {
+            background-color: #e9ecef;
         }
     </style>
 </head>
@@ -152,6 +224,12 @@
                 <input type="number" id="startNode" placeholder="Başlangıç ID">
                 <input type="number" id="endNode" placeholder="Bitiş ID">
                 <button onclick="findShortestPath()" class="control-button">En Kısa Yol Bul</button>
+                <button onclick="resetShortestPath()" class="control-button cancel-button">İptal</button>
+                <button onclick="togglePathHistory()" class="control-button" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);">Son Aramalar</button>
+            </div>
+            <div class="graph-controls">
+                <button onclick="analyzeGraph()" class="control-button">Graf Analizi</button>
+                <button onclick="resetGraphAnalysis()" class="control-button cancel-button">İptal</button>
             </div>
         </div>
 
@@ -161,7 +239,17 @@
             <div class="community-legend"></div>
         </div>
         
-        <div id="shortest-path-result" class="result-panel"></div>
+        <div id="shortest-path-result" class="result-panel">
+            <div id="path-history" class="path-history">
+                <h4>Son Aramalar</h4>
+                <div id="path-history-list"></div>
+                <button onclick="clearPathHistory()" class="control-button cancel-button" style="margin-top: 10px;">Geçmişi Temizle</button>
+            </div>
+        </div>
+        <div id="graph-analysis-result" class="result-panel">
+            <h3>Graf Analizi Sonuçları</h3>
+            <div id="graph-stats"></div>
+        </div>
         <div id="network-container"></div>
     </div>
 
@@ -180,6 +268,10 @@
         let svg, simulation, nodeElements, linkElements;
         let communities = null;
         let selectedCommunity = null;
+
+        // Geçmiş kuyruğu için global değişken
+        let pathHistory = [];
+        const MAX_HISTORY_SIZE = 5; // En fazla son 5 aramayı tutacağız
 
         // Graf verilerini yükle ve görselleştirmeyi başlat
         async function initializeNetwork() {
@@ -257,7 +349,50 @@
                 .append('line')
                 .attr('stroke', '#999')
                 .attr('stroke-opacity', 0.6)
-                .attr('stroke-width', d => d.isTop5Connection ? 3 : 1);
+                .attr('stroke-width', d => d.isTop5Connection ? 3 : 1)
+                .on('mouseover', function(event, d) {
+                    tooltip.transition()
+                        .duration(200)
+                        .style('opacity', .9);
+                    tooltip.html(`
+                        <div style="color: #ffffff;">
+                            <div style="margin-bottom: 5px;"><strong>Kaynak Düğüm:</strong> ${d.source.id}</div>
+                            <div style="margin-bottom: 5px;"><strong>Hedef Düğüm:</strong> ${d.target.id}</div>
+                            <div><strong>Önemli Bağlantı:</strong> ${d.isTop5Connection ? 'Evet' : 'Hayır'}</div>
+                        </div>
+                    `)
+                        .style('left', (event.pageX + 10) + 'px')
+                        .style('top', (event.pageY - 28) + 'px');
+
+                    // Bağlantıyı vurgula
+                    d3.select(this)
+                        .attr('stroke', '#ff4444')
+                        .attr('stroke-opacity', 1)
+                        .attr('stroke-width', d => d.isTop5Connection ? 4 : 2);
+
+                    // Bağlı düğümleri vurgula
+                    nodeElements
+                        .filter(node => node.id === d.source.id || node.id === d.target.id)
+                        .attr('stroke', '#ff4444')
+                        .attr('stroke-width', 2);
+                })
+                .on('mouseout', function(event, d) {
+                    tooltip.transition()
+                        .duration(500)
+                        .style('opacity', 0);
+
+                    // Bağlantıyı normal haline döndür
+                    d3.select(this)
+                        .attr('stroke', '#999')
+                        .attr('stroke-opacity', 0.6)
+                        .attr('stroke-width', d => d.isTop5Connection ? 3 : 1);
+
+                    // Düğümleri normal haline döndür
+                    nodeElements
+                        .filter(node => node.id === d.source.id || node.id === d.target.id)
+                        .attr('stroke', null)
+                        .attr('stroke-width', null);
+                });
 
             // Düğümleri çiz
             nodeElements = g.append('g')
@@ -265,8 +400,34 @@
                 .data(nodes)
                 .enter()
                 .append('circle')
-                .attr('r', d => d.size || 5)
-                .attr('fill', d => d.color)
+                .attr('r', d => {
+                    const connectionCount = d.connectionCount || 1;
+                    const baseSize = Math.sqrt(connectionCount) * 3;
+                    
+                    if (d.isTop5) {
+                        return Math.min(45, Math.max(15, baseSize * 1.5));
+                    } else if (d.isCentral) {
+                        return Math.min(45, Math.max(15, baseSize * 1.2));
+                    } else if (d.hasHighConnections) {
+                        return Math.min(45, Math.max(15, baseSize * 1.1));
+                    } else {
+                        return Math.min(45, Math.max(8, baseSize));
+                    }
+                })
+                .attr('fill', d => {
+                    if (d.isTop5) {
+                        return "#ff0000"; // Kırmızı - En çok bağlantıya sahip top 5
+                    } else if (d.isCentral) {
+                        return "#ffa500"; // Turuncu - Merkezi düğümler
+                    } else if (d.hasHighConnections) {
+                        return "#ffd700"; // Altın - 4+ bağlantısı olanlar
+                    } else {
+                        // Bağlantı sayısına göre mavi tonları
+                        const connectionCount = d.connectionCount || 1;
+                        const blueIntensity = Math.min(255, Math.max(100, Math.floor(connectionCount * 20)));
+                        return `rgb(31, ${blueIntensity}, 255)`;
+                    }
+                })
                 .call(drag(simulation));
 
             // Düğüm etiketlerini ekle
@@ -308,12 +469,14 @@
                         .duration(200)
                         .style('opacity', .9);
                     tooltip.html(`
-                        <strong>Kullanıcı ID:</strong> ${d.id}<br/>
-                        <strong>Bağlantı Sayısı:</strong> ${d.connectionCount}<br/>
-                        <strong>Topluluk ID:</strong> ${d.communityId || 'Belirsiz'}<br/>
-                        <strong>Öne Çıkan Düğüm:</strong> ${d.isTop5 ? 'Evet' : 'Hayır'}<br/>
-                        <strong>Merkez Düğüm:</strong> ${d.isCentral ? 'Evet' : 'Hayır'}<br/>
-                        <strong>4+ Bağlantı:</strong> ${d.hasHighConnections ? 'Evet' : 'Hayır'}
+                        <div style="color: #ffffff;">
+                            <div style="margin-bottom: 5px;"><strong>Kullanıcı ID:</strong> ${d.id}</div>
+                            <div style="margin-bottom: 5px;"><strong>Bağlantı Sayısı:</strong> ${d.connectionCount}</div>
+                            <div style="margin-bottom: 5px;"><strong>Topluluk ID:</strong> ${d.communityId || 'Belirsiz'}</div>
+                            <div style="margin-bottom: 5px;"><strong>Öne Çıkan Düğüm:</strong> ${d.isTop5 ? 'Evet' : 'Hayır'}</div>
+                            <div style="margin-bottom: 5px;"><strong>Merkez Düğüm:</strong> ${d.isCentral ? 'Evet' : 'Hayır'}</div>
+                            <div><strong>4+ Bağlantı:</strong> ${d.hasHighConnections ? 'Evet' : 'Hayır'}</div>
+                        </div>
                     `)
                         .style('left', (event.pageX + 10) + 'px')
                         .style('top', (event.pageY - 28) + 'px');
@@ -473,7 +636,7 @@
             updateVisualization();
         }
 
-        // En kısa yol analizi fonksiyonu
+        // En kısa yol analizi fonksiyonunu güncelle
         async function findShortestPath() {
             const startNode = document.getElementById('startNode').value;
             const endNode = document.getElementById('endNode').value;
@@ -491,13 +654,28 @@
                 resultDiv.style.display = 'block';
                 
                 if (data.path && data.path.length > 0) {
+                    // Geçmişe ekle
+                    addToPathHistory({
+                        from: startNode,
+                        to: endNode,
+                        path: data.path,
+                        distance: data.totalWeight,
+                        timestamp: new Date().toLocaleTimeString()
+                    });
+
                     resultDiv.innerHTML = `
                         <h4>En Kısa Yol Sonuçları:</h4>
                         <p>Yol: ${data.path.join(' → ')}</p>
                         <p>Mesafe: ${data.totalWeight} adım</p>
                         <button onclick="resetPathHighlight()" class="control-button">Vurgulamayı Kaldır</button>
+                        <div id="path-history" class="path-history">
+                            <h4>Son Aramalar</h4>
+                            <div id="path-history-list"></div>
+                            <button onclick="clearPathHistory()" class="control-button cancel-button" style="margin-top: 10px;">Geçmişi Temizle</button>
+                        </div>
                     `;
 
+                    updatePathHistoryDisplay();
                     highlightPath(data.path);
                 } else {
                     resultDiv.innerHTML = `
@@ -508,6 +686,33 @@
             } catch (error) {
                 console.error('En kısa yol analizi hatası:', error);
                 alert('En kısa yol analizi sırasında bir hata oluştu: ' + error.message);
+            }
+        }
+
+        // Geçmişe yeni arama ekle
+        function addToPathHistory(historyItem) {
+            pathHistory.unshift(historyItem); // Yeni aramayı başa ekle
+            if (pathHistory.length > MAX_HISTORY_SIZE) {
+                pathHistory.pop(); // En eski aramayı çıkar
+            }
+            updatePathHistoryDisplay();
+        }
+
+        // Geçmiş görüntülemeyi güncelle
+        function updatePathHistoryDisplay() {
+            const historyList = document.getElementById('path-history-list');
+            if (historyList) {
+                historyList.innerHTML = pathHistory.map(item => `
+                    <div class="path-history-item">
+                        <div>
+                            <strong>${item.timestamp}</strong> - 
+                            Düğüm ${item.from} → ${item.to}
+                        </div>
+                        <div>
+                            Mesafe: ${item.distance} adım
+                        </div>
+                    </div>
+                `).join('');
             }
         }
 
@@ -561,30 +766,174 @@
             
             // Düğümleri orijinal renklerine ve boyutlarına döndür
             nodes.forEach(node => {
-                const connectionCount = node.connectionCount;
+                const connectionCount = node.connectionCount || 1;
                 const baseSize = Math.sqrt(connectionCount) * 3;
                 
                 if (node.isTop5) {
-                    node.color = "#ff0000";
+                    node.color = "#ff0000"; // Kırmızı - En çok bağlantıya sahip top 5
                     node.size = Math.min(45, Math.max(15, baseSize * 1.5));
                 } else if (node.isCentral) {
-                    node.color = "#ffa500";
-                    node.size = Math.min(45, Math.max(15, baseSize));
+                    node.color = "#ffa500"; // Turuncu - Merkezi düğümler
+                    node.size = Math.min(45, Math.max(15, baseSize * 1.2));
                 } else if (node.hasHighConnections) {
-                    node.color = "#ffd700";
-                    node.size = Math.min(45, Math.max(15, baseSize));
+                    node.color = "#ffd700"; // Altın - 4+ bağlantısı olanlar
+                    node.size = Math.min(45, Math.max(15, baseSize * 1.1));
                 } else {
-                    node.color = "#1f77b4";
-                    node.size = Math.min(45, Math.max(15, baseSize));
+                    // Bağlantı sayısına göre mavi tonları
+                    const blueIntensity = Math.min(255, Math.max(100, Math.floor(connectionCount * 20)));
+                    node.color = `rgb(31, ${blueIntensity}, 255)`;
+                    node.size = Math.min(45, Math.max(8, baseSize));
                 }
                 delete node.communityId;
             });
 
-            // Görselleştirmeyi yeniden oluştur
-            createVisualization();
+            // Sadece görsel güncelleme yap
+            nodeElements
+                .attr('fill', d => d.color)
+                .attr('r', d => d.size)
+                .attr('opacity', 1);
+
+            // Bağlantıları orijinal renklerine döndür
+            linkElements
+                .attr('stroke', '#999')
+                .attr('stroke-opacity', 0.6)
+                .attr('stroke-width', d => d.isTop5Connection ? 3 : 1);
+        }
+
+        // Graf analizi fonksiyonu
+        function analyzeGraph() {
+            try {
+                // Temel graf istatistiklerini hesapla
+                const nodeCount = nodes.length;
+                const linkCount = links.length;
+                
+                // Ortalama bağlantı sayısını hesapla
+                const avgConnections = (2 * linkCount / nodeCount).toFixed(2);
+                
+                // 4+ bağlantıya sahip düğüm sayısını hesapla
+                const highConnectionNodes = nodes.filter(node => node.hasHighConnections).length;
+                
+                // Merkezi düğüm sayısını hesapla
+                const centralNodes = nodes.filter(node => node.isCentral).length;
+                
+                // En çok bağlantıya sahip 5 düğümü bul
+                const top5NodesDetails = nodes
+                    .sort((a, b) => b.connectionCount - a.connectionCount)
+                    .slice(0, 5)
+                    .map(node => ({
+                        id: node.id,
+                        connections: node.connectionCount
+                    }));
+                
+                const resultDiv = document.getElementById('graph-stats');
+                resultDiv.innerHTML = `
+                    <div class="community-info">
+                        <div class="community-stat">
+                            <span>Toplam Düğüm Sayısı:</span>
+                            <strong>${nodeCount}</strong>
+                        </div>
+                        <div class="community-stat">
+                            <span>Toplam Bağlantı Sayısı:</span>
+                            <strong>${linkCount}</strong>
+                        </div>
+                        <div class="community-stat">
+                            <span>Ortalama Bağlantı Sayısı:</span>
+                            <strong>${avgConnections}</strong>
+                        </div>
+                        <div class="community-stat">
+                            <span>4+ Bağlantılı Düğüm Sayısı:</span>
+                            <strong>${highConnectionNodes}</strong>
+                        </div>
+                        <div class="community-stat">
+                            <span>Merkezi Düğüm Sayısı:</span>
+                            <strong>${centralNodes}</strong>
+                        </div>
+                        <div class="community-stat">
+                            <span>En Çok Bağlantıya Sahip 5 Düğüm:</span>
+                            <div style="margin-left: 20px;">
+                                ${top5NodesDetails.map((node, index) => `
+                                    <div style="margin: 5px 0;">
+                                        ${index + 1}. Düğüm ${node.id}: ${node.connections} bağlantı
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // Graf analizi sonucunu göster
+                document.getElementById('graph-analysis-result').style.display = 'block';
+            } catch (error) {
+                console.error('Graf analizi hatası:', error);
+                alert('Graf analizi sırasında bir hata oluştu: ' + error.message);
+            }
+        }
+
+        // Graf analizi sonuçlarını sıfırla
+        function resetGraphAnalysis() {
+            // Graf analizi panelini gizle
+            document.getElementById('graph-analysis-result').style.display = 'none';
             
-            // Simülasyonu yeniden başlat
-            simulation.alpha(0.3).restart();
+            // İsterseniz burada ek temizleme işlemleri yapabilirsiniz
+            document.getElementById('graph-stats').innerHTML = '';
+        }
+
+        // Geçmiş görüntüleme durumunu değiştir
+        function togglePathHistory() {
+            const historyDiv = document.getElementById('path-history');
+            if (!historyDiv) {
+                // Eğer geçmiş paneli yoksa, oluştur
+                const resultDiv = document.getElementById('shortest-path-result');
+                resultDiv.innerHTML = `
+                    <div id="path-history" class="path-history">
+                        <h4>Son Aramalar</h4>
+                        <div id="path-history-list"></div>
+                        <button onclick="clearPathHistory()" class="control-button cancel-button" style="margin-top: 10px;">Geçmişi Temizle</button>
+                    </div>
+                `;
+                resultDiv.style.display = 'block';
+                const newHistoryDiv = document.getElementById('path-history');
+                newHistoryDiv.style.display = 'block';
+                updatePathHistoryDisplay();
+            } else {
+                if (historyDiv.style.display === 'none' || !historyDiv.style.display) {
+                    document.getElementById('shortest-path-result').style.display = 'block';
+                    historyDiv.style.display = 'block';
+                    updatePathHistoryDisplay();
+                } else {
+                    document.getElementById('shortest-path-result').style.display = 'none';
+                    historyDiv.style.display = 'none';
+                }
+            }
+        }
+
+        // Geçmişi temizle
+        function clearPathHistory() {
+            pathHistory = [];
+            updatePathHistoryDisplay();
+        }
+
+        // En kısa yol analizi sonuçlarını sıfırla
+        function resetShortestPath() {
+            // En kısa yol sonuç panelini gizle
+            document.getElementById('shortest-path-result').style.display = 'none';
+            
+            // Sadece sonuç içeriğini güncelle, geçmiş panelini koruyarak
+            const resultDiv = document.getElementById('shortest-path-result');
+            resultDiv.innerHTML = `
+                <div id="path-history" class="path-history">
+                    <h4>Son Aramalar</h4>
+                    <div id="path-history-list"></div>
+                    <button onclick="clearPathHistory()" class="control-button cancel-button" style="margin-top: 10px;">Geçmişi Temizle</button>
+                </div>
+            `;
+            
+            // Vurgulamaları kaldır
+            resetPathHighlight();
+            
+            // Input alanlarını temizle
+            document.getElementById('startNode').value = '';
+            document.getElementById('endNode').value = '';
         }
 
         // Sayfa yüklendiğinde ağı başlat
